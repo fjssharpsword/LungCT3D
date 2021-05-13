@@ -30,6 +30,7 @@ warn = True
 """
 
 def test():
+    
     ann = pl.query(pl.Annotation).first()
     ann.print_formatted_feature_table()
     vol = ann.scan.to_volume()
@@ -43,7 +44,7 @@ def test():
     plt.legend()
     #plt.show()
     plt.savefig('/data/pycode/VR3D/imgs/test.png')
-
+    
 def main():
     test()
 

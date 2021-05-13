@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 from scipy.ndimage import zoom
 #define by myself
 sys.path.append("..") 
-from VR3D.config import *
+from LungCT3D.config import *
 #from config import *
 """
 Dataset:LIDC-IDRI
@@ -97,13 +97,13 @@ class DatasetGenerator(Dataset):
     def __len__(self):
         return len(self.vol_labels)
 
-PATH_TO_TRAIN_FILE = '/data/pycode/VR3D/datasets/LIDC_VR_Train.txt'
+PATH_TO_TRAIN_FILE = '/data/pycode/LungCT3D/DataLIDC/LIDC_VR_Train.txt'
 def get_train_dataloader(batch_size, shuffle, num_workers):
     dataset_train = DatasetGenerator(path_to_dataset_file=PATH_TO_TRAIN_FILE)
     data_loader_train = DataLoader(dataset=dataset_train, batch_size=batch_size,shuffle=shuffle, num_workers=num_workers, pin_memory=True)
     return data_loader_train
 
-PATH_TO_TEST_FILE = '/data/pycode/VR3D/datasets/LIDC_VR_Test.txt'
+PATH_TO_TEST_FILE = '/data/pycode/LungCT3D/DataLIDC/LIDC_VR_Test.txt'
 def get_test_dataloader(batch_size, shuffle, num_workers):
     dataset_test = DatasetGenerator(path_to_dataset_file=PATH_TO_TEST_FILE)
     data_loader_test = DataLoader(dataset=dataset_test, batch_size=batch_size,shuffle=shuffle, num_workers=num_workers, pin_memory=True)
