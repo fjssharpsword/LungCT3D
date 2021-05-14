@@ -30,7 +30,7 @@ from sklearn.metrics import ndcg_score
 from config import *
 from utils.logger import get_logger
 from DataLIDC.LIDC_VR_Scan import get_train_dataloader, get_test_dataloader
-from nets.CT3DUnet import CT3DUnetModel, DiceLoss
+from nets.CTScan import CT3DUnetModel, DiceLoss
 
 #command parameters
 parser = argparse.ArgumentParser(description='For LungCT')
@@ -75,7 +75,7 @@ def Train():
         model.train()  #set model to training mode
         loss_train = []
         with torch.autograd.enable_grad():
-            for batch_idx, (ts_imgs, ts_masks, ts_label) in enumerate(dataloader_train):
+            for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_train):
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_mask = torch.autograd.Variable(ts_masks).cuda()
@@ -97,7 +97,7 @@ def Train():
         model.eval()
         loss_test = []
         with torch.autograd.no_grad():
-            for batch_idx, (ts_imgs, ts_masks, ts_label) in enumerate(dataloader_test):
+            for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_test):
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_mask = torch.autograd.Variable(ts_masks).cuda()
@@ -142,26 +142,28 @@ def Test():
 
     print('********************Build feature database!********************')
     tr_label = torch.FloatTensor().cuda()
-    tr_mask = torch.FloatTensor().cuda()
+    tr_nodvol = torch.FloatTensor().cuda()
     tr_feat = torch.FloatTensor().cuda()
     with torch.autograd.no_grad():
-        for batch_idx, (ts_imgs, ts_masks, ts_label) in enumerate(dataloader_train):
+        for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_train):
             var_image = torch.autograd.Variable(ts_imgs).cuda()
             _, var_feat = model(var_image)
             tr_feat = torch.cat((tr_feat, var_feat.data), 0)
             tr_label = torch.cat((tr_label, ts_label.cuda()), 0)
-
+            tr_nodvol = torch.cat((tr_nodvol, ts_nodvol.cuda()), 0)
             sys.stdout.write('\r train set process: = {}'.format(batch_idx + 1))
             sys.stdout.flush()
 
     te_label = torch.FloatTensor().cuda()
+    te_nodvol = torch.FloatTensor().cuda()
     te_feat = torch.FloatTensor().cuda()
     with torch.autograd.no_grad():
-        for batch_idx, (image, label) in enumerate(dataloader_test):
-            te_label = torch.cat((te_label, label.cuda()), 0)
-            var_image = torch.autograd.Variable(image).cuda()
-            var_feat = model(var_image)
+        for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_test):
+            var_image = torch.autograd.Variable(ts_imgs).cuda()
+            _, var_feat = model(var_image)
             te_feat = torch.cat((te_feat, var_feat.data), 0)
+            te_label = torch.cat((te_label, ts_label.cuda()), 0)
+            te_nodvol = torch.cat((te_nodvol, ts_nodvol.cuda()), 0)
             sys.stdout.write('\r test set process: = {}'.format(batch_idx + 1))
             sys.stdout.flush()
 
@@ -169,26 +171,33 @@ def Test():
     sim_mat = cosine_similarity(te_feat.cpu().numpy(), tr_feat.cpu().numpy())
     te_label = te_label.cpu().numpy()
     tr_label = tr_label.cpu().numpy()
+    te_nodvol = te_nodvol.cpu().numpy()
+    tr_nodvol = tr_nodvol.cpu().numpy()
 
     for topk in [5]: #[5,10,20,50]:
         mHRs_avg = []
         mAPs_avg = []
         NDCG_avg = []
-        #NDCG: lack of ground truth ranking labels
         for i in range(sim_mat.shape[0]):
             idxs, vals = zip(*heapq.nlargest(topk, enumerate(sim_mat[i,:].tolist()), key=lambda x:x[1]))
             num_pos = 0
             rank_pos = 0
             mAP = []
             te_idx = te_label[i,:][0]
+            #calculate the relevance based on the volume of nodules
+            gt_rel = abs(tr_nodvol - te_nodvol[i])
+            gt_rel = abs(gt_rel-gt_rel.max())  + 1 # add 1 to avoid the results is zero which applys they are not relevant.
+            pd_rank = []
             for j in idxs:
                 rank_pos = rank_pos + 1
                 tr_idx = tr_label[j,:][0]
-                if abs(tr_idx - te_idx) < np.mean(tr_label):  #hit
+                if te_idx == tr_idx:  #hit
                     num_pos = num_pos +1
                     mAP.append(num_pos/rank_pos)
+                    pd_rank.append(gt_rel[j])
                 else:
                     mAP.append(0)
+                    pd_rank.append(0)
             if len(mAP) > 0:
                 mAPs_avg.append(np.mean(mAP))
             else:
@@ -196,24 +205,22 @@ def Test():
             mHRs_avg.append(num_pos/rank_pos)
 
             #calculate NDCG
-            idxs = np.array(idxs)#tuple -> array
-            pd_score = tr_label[idxs].transpose(1,0)
-            gt_score = abs(np.sort(-tr_label[idxs],axis=0)).transpose(1,0)
-            NDCG_avg.append(ndcg_score(gt_score, pd_score))
+            pd_rank = np.array([pd_rank])
+            gt_rank = abs(np.sort(-pd_rank))
+            NDCG_avg.append(ndcg_score(gt_rank, pd_rank))
             sys.stdout.write('\r test set process: = {}'.format(i+1))
             sys.stdout.flush()
 
         #Hit ratio
-        logger.info("SANet Average mHR@{}={:.4f}".format(topk, np.mean(mHRs_avg)))
+        logger.info("HR@{}={:.4f}".format(topk, np.mean(mHRs_avg)))
         #average precision
-        logger.info("SANet Average mAP@{}={:.4f}".format(topk, np.mean(mAPs_avg)))
+        logger.info("AP@{}={:.4f}".format(topk, np.mean(mAPs_avg)))
         #NDCG: normalized discounted cumulative gain
-        logger.info("SANet Average mNDCG@{}={:.4f}".format(topk, np.mean(NDCG_avg)))
+        logger.info("NDCG@{}={:.4f}".format(topk, np.mean(NDCG_avg)))
 
 def main():
     Train()
-    #Test()
-
+    Test()
 
 if __name__ == '__main__':
     main()

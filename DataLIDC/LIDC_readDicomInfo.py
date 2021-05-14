@@ -41,11 +41,13 @@ def getPixelspacing():
     print(len(scan.annotations))
     """
     scans = pl.query(pl.Scan)
-    df_info = pd.DataFrame(columns = ['patient_id','pixel_spacing','slice_thickness','slice_spacing','slice_zvals'])
+    df_info = pd.DataFrame(columns = ['patient_id','pixel_spacing','slice_thickness','slice_spacing'])
     for scan in scans:
-        df_info = df_info.append([scan.patient_id, scan.pixel_spacing,scan.slice_thickness,scan.slice_spacing,scan.slice_zvals])
-    print('Shape of DICOM Info: {}'.format(datas_te.shape))
-    datas_te.to_csv('/data/pycode/LungCT3D/DataLIDC/LIDC_DICOM_info.txt', index=False, sep=',')
+        #print([scan.patient_id, scan.pixel_spacing,scan.slice_thickness,scan.slice_spacing])
+        df_info = df_info.append([{'patient_id':scan.patient_id, 'pixel_spacing':scan.pixel_spacing,\
+                                    'slice_thickness':scan.slice_thickness,'slice_spacing':scan.slice_spacing}], ignore_index=True)
+    print('Shape of DICOM Info: {}'.format(df_info.shape))
+    df_info.to_csv('/data/pycode/LungCT3D/DataLIDC/LIDC_DICOM_info.txt', index=False, sep=',')
 
 def main():
     getPixelspacing()

@@ -16,5 +16,3 @@ PATH_TO_IMAGES_DIR = '/data/fjsdata/LIDC-IDRI/vrdata/Image/'
 PATH_TO_MASKS_DIR = '/data/fjsdata/LIDC-IDRI/vrdata/Mask/'
 PATH_TO_IMAGES_CLEAN_DIR = '/data/fjsdata/LIDC-IDRI/vrdata/Clean/Image/'
 PATH_TO_MASKS_CLEAN_DIR = '/data/fjsdata/LIDC-IDRI/vrdata/Clean/Mask/'
-DICOM_PIXEL_SPACING = 0.63671875
-

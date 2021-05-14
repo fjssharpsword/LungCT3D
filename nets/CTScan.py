@@ -177,13 +177,72 @@ class CT3DUnetModel(nn.Module):
     def forward(self, x):
         x, downsampling_features = self.encoder(x)
         feat = self.gem3d(x).view(x.size(0), -1)
+        feat = torch.sigmoid(feat)
         x = self.decoder(x, downsampling_features)
         x = self.sigmoid(x)
         
         return x, feat
 
+#https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
+class CircleLoss(nn.Module):
+    def __init__(self, scale=32, margin=0.25, similarity='cos', **kwargs):
+        super(CircleLoss, self).__init__()
+        self.scale = scale
+        self.margin = margin
+        self.similarity = similarity
+
+    def forward(self, feats, labels):
+        assert feats.size(0) == labels.size(0), \
+            f"feats.size(0): {feats.size(0)} is not equal to labels.size(0): {labels.size(0)}"
+        
+        labels = (labels.cpu().data + 1)
+        labels = labels.unsqueeze(1)
+        mask = torch.matmul(labels, torch.t(labels))
+        mask = mask.eq(1).int() + mask.eq(4).int() + mask.eq(9).int() + mask.eq(16).int() + mask.eq(25).int()#1x1,2x2,3x3,4x4,5x5
+
+        pos_mask = mask.triu(diagonal=1)
+        neg_mask = (mask - 1).abs_().triu(diagonal=1)
+        if self.similarity == 'dot':
+            sim_mat = torch.matmul(feats, torch.t(feats))
+        elif self.similarity == 'cos':
+            feats = F.normalize(feats)
+            sim_mat = feats.mm(feats.t())
+        else:
+            raise ValueError('This similarity is not implemented.')
+
+        pos_pair_ = sim_mat[pos_mask == 1]
+        neg_pair_ = sim_mat[neg_mask == 1]
+
+        alpha_p = torch.relu(-pos_pair_ + 1 + self.margin)
+        alpha_n = torch.relu(neg_pair_ + self.margin)
+        margin_p = 1 - self.margin
+        margin_n = self.margin
+        loss_p = torch.sum(torch.exp(-self.scale * alpha_p * (pos_pair_ - margin_p)))
+        loss_n = torch.sum(torch.exp(self.scale * alpha_n * (neg_pair_ - margin_n)))
+        loss = torch.log(1 + loss_p * loss_n)
+        return loss
+
+class CT3DClassifier(nn.Module):
+    def __init__(self, in_channels, num_classes, model_depth=4, final_activation="sigmoid"):
+        super(CT3DClassifier, self).__init__()
+        self.encoder = EncoderBlock(in_channels=in_channels, model_depth=model_depth)
+        if final_activation == "sigmoid":
+            self.sigmoid = nn.Sigmoid()
+        else:
+            self.softmax = nn.Softmax(dim=1)
+        self.gem3d = GeM3D()
+        self.classifier = nn.Sequential(nn.Linear(512, num_classes), nn.Softmax(dim=1))
+
+    def forward(self, x):
+        x, downsampling_features = self.encoder(x)
+        x = self.gem3d(x).view(x.size(0), -1)
+        feat = self.sigmoid(x)
+        out = self.classifier(feat)
+        return out, feat
+
 if __name__ == "__main__":
     #for debug  
+    """
     slice = torch.rand(16, 1, 32, 64, 64).cuda()
     mask = torch.rand(16, 1, 32, 64, 64).cuda()
     #encoder = EncoderBlock(in_channels=1).cuda()
@@ -195,3 +254,26 @@ if __name__ == "__main__":
     print(feat.shape)
     dl = DiceLoss().cuda()
     print(dl(mask, out).item())
+    """
+    """
+    scan =  torch.rand(16, 1, 32, 64, 64).cuda()
+    model = CT3DClassifier(in_channels=1, num_classes=5).cuda()
+    out, feat = model(scan)
+    print(feat.shape)
+    print(out.shape)
+    """
+
+    labels = torch.randint(5,(3,)) 
+    print(labels)
+    labels = labels + 1
+    print(labels)
+    labels = labels.unsqueeze(1)
+    print(labels)
+    mask = torch.matmul(labels, torch.t(labels))
+    print(mask)
+    mask = mask.eq(labels[0]*labels[0]).int() + mask.eq(labels[1]*labels[1]).int()
+    print(mask)
+
+
+
+

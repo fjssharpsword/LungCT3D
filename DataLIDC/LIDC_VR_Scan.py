@@ -31,12 +31,18 @@ class DatasetGenerator(Dataset):
                 with corresponding labels.
             transform: optional transform to be applied on a sample.
         """
+        vol_ids = []
+        vol_pixelspacings = []
         vol_imgs = []
         vol_masks = []
         vol_labels = []
-        datas = pd.read_csv(path_to_dataset_file, names =['vol_id','nod_id','slice_id','img','mask','mali_label','cancer_flag','clean_flag'], sep=',', header=None)
+        datas = pd.read_csv(path_to_dataset_file, \
+                            names =['vol_id','nod_id','slice_id','img','mask','mali_label','cancer_flag','clean_flag'], \
+                            sep=',', header=None)
+        datas_dicom = pd.read_csv(PATH_TO_DICOM_INFO, sep=',') #read the dicominfo
         vol_list = datas['vol_id'].unique().tolist() #first col
         for vol in vol_list:
+            pixelSpacing = datas_dicom.loc[datas_dicom['patient_id'] == vol].values[0][1]
             vol_df = datas[datas['vol_id']==vol] 
             nod_list = vol_df['nod_id'].unique().tolist()
             for nod in nod_list:
@@ -49,13 +55,17 @@ class DatasetGenerator(Dataset):
                     slice_names.append(slice_name)
                     mask_name = os.path.join(PATH_TO_MASKS_DIR, nod_line[0], nod_line[4]+'.npy') 
                     mask_names.append(mask_name)
-                    mali_label = nod_line[5] 
+                    mali_label = nod_line[5]-1 #[1-5]->[0,4]
                     mali_labels.append(mali_label)
+                vol_ids.append(vol)
+                vol_pixelspacings.append(pixelSpacing)
                 vol_imgs.append(slice_names)
                 vol_masks.append(mask_names)
                 assert len(set(mali_labels))== 1 #equal label for the same nodule
                 vol_labels.append(list(set(mali_labels)))
-                
+        
+        self.vol_ids = vol_ids
+        self.vol_pixelspacings = vol_pixelspacings
         self.vol_imgs = vol_imgs
         self.vol_masks = vol_masks
         self.vol_labels = vol_labels
@@ -87,16 +97,24 @@ class DatasetGenerator(Dataset):
             mask = np.load(mask)
             mask = torch.as_tensor(mask, dtype=torch.float32)
             ts_masks = torch.cat((ts_masks, mask.unsqueeze(0)), 0)
+        #calculate the volume of nodule
+        pixelspacing = self.vol_pixelspacings[index]
+        nod_vol = pixelspacing * torch.sum(ts_masks)
+        ts_nodvol = torch.as_tensor(nod_vol, dtype=torch.float32)
+        #resize the depth of scan
         ts_masks = zoom(ts_masks, (config['VOL_DIMS']/ts_masks.shape[0], 0.125, 0.125), order=1)
         ts_masks = torch.as_tensor(ts_masks, dtype=torch.float32)
         ts_masks = ts_masks.unsqueeze(0)#1x32x64x64
         #get label
-        ts_label = torch.as_tensor(self.vol_labels[index], dtype=torch.float32)
-        return ts_imgs, ts_masks, ts_label
+        #ts_label = torch.as_tensor(self.vol_labels[index], dtype=torch.float32) 
+        #ts_label = torch.LongTensor(self.vol_labels[index][0])
+        ts_label = torch.as_tensor(self.vol_labels[index][0], dtype=torch.long) 
+        return ts_imgs, ts_masks, ts_label, ts_nodvol
 
     def __len__(self):
-        return len(self.vol_labels)
+        return len(self.vol_ids)
 
+PATH_TO_DICOM_INFO = '/data/pycode/LungCT3D/DataLIDC/LIDC_DICOM_info.txt'
 PATH_TO_TRAIN_FILE = '/data/pycode/LungCT3D/DataLIDC/LIDC_VR_Train.txt'
 def get_train_dataloader(batch_size, shuffle, num_workers):
     dataset_train = DatasetGenerator(path_to_dataset_file=PATH_TO_TRAIN_FILE)
@@ -113,8 +131,9 @@ if __name__ == "__main__":
 
     #for debug   
     datasets = get_train_dataloader(batch_size=16, shuffle=True, num_workers=0)
-    for batch_idx, (ts_imgs, ts_masks, ts_label) in enumerate(datasets):
+    for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(datasets):
         print(ts_imgs.shape)
         print(ts_masks.shape)
         print(ts_label.shape)
+        print(ts_nodvol.shape)
         break
