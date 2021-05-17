@@ -89,7 +89,7 @@ class DatasetGenerator(Dataset):
             ts_imgs = torch.cat((ts_imgs, img.unsqueeze(0)), 0)
         ts_imgs = zoom(ts_imgs, (config['VOL_DIMS']/ts_imgs.shape[0], 0.125, 0.125), order=1)
         ts_imgs = torch.as_tensor(ts_imgs, dtype=torch.float32)
-        ts_imgs = ts_imgs.unsqueeze(0) #1x32x64x64
+        ts_imgs = ts_imgs.unsqueeze(0) #1x8x64x64
         #get masks
         vol_masks = self.vol_masks[index]
         ts_masks = torch.FloatTensor()
@@ -104,7 +104,7 @@ class DatasetGenerator(Dataset):
         #resize the depth of scan
         ts_masks = zoom(ts_masks, (config['VOL_DIMS']/ts_masks.shape[0], 0.125, 0.125), order=1)
         ts_masks = torch.as_tensor(ts_masks, dtype=torch.float32)
-        ts_masks = ts_masks.unsqueeze(0)#1x32x64x64
+        ts_masks = ts_masks.unsqueeze(0)#1x8x64x64
         #get label
         #ts_label = torch.as_tensor(self.vol_labels[index], dtype=torch.float32) 
         #ts_label = torch.LongTensor(self.vol_labels[index][0])

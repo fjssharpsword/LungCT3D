@@ -30,11 +30,11 @@ from sklearn.metrics import ndcg_score
 from config import *
 from utils.logger import get_logger
 from DataLIDC.LIDC_VR_Scan import get_train_dataloader, get_test_dataloader
-from nets.CT3DClassifier import CT3DClassifier, CircleLoss
+from nets.CT3DScanSeg import CT3DUnetModel, DiceLoss
 
 #command parameters
 parser = argparse.ArgumentParser(description='For LungCT')
-parser.add_argument('--model', type=str, default='CTScan', help='CTScan')
+parser.add_argument('--model', type=str, default='CT3DUnet', help='CT3DUnet')
 args = parser.parse_args()
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = config['CUDA_VISIBLE_DEVICES']
@@ -48,8 +48,8 @@ def Train():
 
     print('********************load model********************')
     # initialize and load the model
-    if args.model == 'CTScan':
-        model = CT3DClassifier(in_channels=1, num_classes=5)
+    if args.model == 'CT3DUnet':
+        model = CT3DUnetModel(in_channels=1, out_channels=1)
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)
@@ -63,7 +63,7 @@ def Train():
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
     #define loss function
-    criterion = CircleLoss(scale=8).cuda() #nn.CrossEntropyLoss().cuda()
+    criterion = DiceLoss().cuda()#nn.BCELoss().cuda() #ContrastiveLoss().cuda()
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
@@ -78,11 +78,12 @@ def Train():
             for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_train):
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
+                var_mask = torch.autograd.Variable(ts_masks).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
                 var_out, _ = model(var_image)
                 # backward and update parameters
                 optimizer_model.zero_grad()
-                loss_tensor = criterion.forward(var_out, var_label)
+                loss_tensor = criterion.forward(var_out, var_mask)
                 loss_tensor.backward()
                 optimizer_model.step()
                 #show 
@@ -99,9 +100,10 @@ def Train():
             for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_test):
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
+                var_mask = torch.autograd.Variable(ts_masks).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
                 var_out, _ = model(var_image)
-                loss_tensor = criterion.forward(var_out, var_label)
+                loss_tensor = criterion.forward(var_out, var_mask)
                 loss_test.append(loss_tensor.item())
                 sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
                 sys.stdout.flush()
@@ -124,8 +126,8 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    if args.model == 'CTScan':
-        model = CT3DClassifier(in_channels=1, num_classes=5).cuda()
+    if args.model == 'CT3DUnet':
+        model = CT3DUnetModel(in_channels=1, out_channels=1).cuda()
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)
@@ -181,14 +183,14 @@ def Test():
             num_pos = 0
             rank_pos = 0
             mAP = []
-            te_idx = te_label[i]#te_label[i,:][0]
+            te_idx = te_label[i,:][0]
             #calculate the relevance based on the volume of nodules
             gt_rel = abs(tr_nodvol - te_nodvol[i])
             gt_rel = abs(gt_rel-gt_rel.max())  + 1 # add 1 to avoid the results is zero which applys they are not relevant.
             pd_rank = []
             for j in idxs:
                 rank_pos = rank_pos + 1
-                tr_idx = tr_label[j]#tr_label[j,:][0]
+                tr_idx = tr_label[j,:][0]
                 if te_idx == tr_idx:  #hit
                     num_pos = num_pos +1
                     mAP.append(num_pos/rank_pos)

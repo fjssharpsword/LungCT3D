@@ -30,11 +30,11 @@ from sklearn.metrics import ndcg_score
 from config import *
 from utils.logger import get_logger
 from DataLIDC.LIDC_VR_Scan import get_train_dataloader, get_test_dataloader
-from nets.CT3DClassifier import CT3DClassifier, CircleLoss
+from nets.CT3DDensenet import generate_model
 
 #command parameters
 parser = argparse.ArgumentParser(description='For LungCT')
-parser.add_argument('--model', type=str, default='CTScan', help='CTScan')
+parser.add_argument('--model', type=str, default='Densenet', help='Densenet')
 args = parser.parse_args()
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = config['CUDA_VISIBLE_DEVICES']
@@ -48,8 +48,8 @@ def Train():
 
     print('********************load model********************')
     # initialize and load the model
-    if args.model == 'CTScan':
-        model = CT3DClassifier(in_channels=1, num_classes=5)
+    if args.model == 'Densenet':
+        model = generate_model(model_depth=121, n_input_channels=1, num_classes=5)
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)
@@ -63,7 +63,7 @@ def Train():
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
     #define loss function
-    criterion = CircleLoss(scale=8).cuda() #nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().cuda()
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
@@ -124,8 +124,8 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    if args.model == 'CTScan':
-        model = CT3DClassifier(in_channels=1, num_classes=5).cuda()
+    if args.model == 'Densenet':
+        model = generate_model(model_depth=121, n_input_channels=1, num_classes=5).cuda()
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)
@@ -217,7 +217,7 @@ def Test():
         logger.info("NDCG@{}={:.4f}".format(topk, np.mean(NDCG_avg)))
 
 def main():
-    Train()
+    #Train()
     Test()
 
 if __name__ == '__main__':
