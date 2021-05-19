@@ -31,7 +31,6 @@ class ConvBlock(nn.Module):
 
     def forward(self, x):
         x = self.batch_norm(self.conv3d(x))
-        # x = self.conv3d(x)
         x = F.elu(x)
         return x
 
@@ -91,6 +90,21 @@ class GeM3D(nn.Module):
     def __repr__(self):
         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
 
+class SpatialAttention(nn.Module):#spatial attention layer
+    def __init__(self):
+        super(SpatialAttention, self).__init__()
+
+        self.conv1 = nn.Conv2d(2, 1, kernel_size=3, padding=1, bias=False)
+        self.sigmoid = nn.Sigmoid()
+        
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=2, keepdim=True)
+        max_out, _ = torch.max(x, dim=2, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=2)
+        x = torch.squeeze(x, 1)
+        x = self.conv1(x)
+        x = torch.unsqueeze(x, 1)
+        return self.sigmoid(x)
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
 class CircleLoss(nn.Module):
@@ -134,15 +148,18 @@ class CircleLoss(nn.Module):
 class CT3DClassifier(nn.Module):
     def __init__(self, in_channels, num_classes, model_depth=4, final_activation="sigmoid"):
         super(CT3DClassifier, self).__init__()
+        self.sa = SpatialAttention()
         self.encoder = EncoderBlock(in_channels=in_channels, model_depth=model_depth)
         if final_activation == "sigmoid":
             self.sigmoid = nn.Sigmoid()
         else:
             self.softmax = nn.Softmax(dim=1)
         self.gem3d = GeM3D()
-        self.classifier = nn.Sequential(nn.Linear(512, num_classes), nn.Softmax(dim=1))
+        #self.classifier = nn.Sequential(nn.Linear(512, num_classes), nn.Softmax(dim=1))
+        self.classifier = nn.Sequential(nn.Linear(512, num_classes), nn.Sigmoid())
 
     def forward(self, x):
+        x = self.sa(x)*x 
         x, downsampling_features = self.encoder(x)
         x = self.gem3d(x).view(x.size(0), -1)
         feat = self.sigmoid(x)
@@ -165,13 +182,9 @@ if __name__ == "__main__":
     print(dl(mask, out).item())
     """
 
-    scan =  torch.rand(16, 1, 8, 64, 64).cuda()
+    scan =  torch.rand(16, 1, 8, 256, 256).cuda()
     model = CT3DClassifier(in_channels=1, num_classes=5).cuda()
     out, feat = model(scan)
     print(feat.shape)
     print(out.shape)
-   
-
-
-
 

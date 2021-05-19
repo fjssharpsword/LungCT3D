@@ -6,8 +6,8 @@ config = {
             'img_path': '/data/pycode/LungCT3D/imgs/',
             'VOL_DIMS': 8, 
             'CUDA_VISIBLE_DEVICES': "0,1,2,3,4,5,6,7",
-            'MAX_EPOCHS': 20,
-            'BATCH_SIZE': 64
+            'MAX_EPOCHS': 50,
+            'BATCH_SIZE': 64+16
          } 
 
 #config for dataset

@@ -63,7 +63,7 @@ def Train():
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
     #define loss function
-    criterion = CircleLoss(scale=8).cuda() #nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().cuda() #CircleLoss(scale=8).cuda()
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
@@ -79,7 +79,7 @@ def Train():
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
-                var_out, _ = model(var_image)
+                var_out, var_feat = model(var_image)
                 # backward and update parameters
                 optimizer_model.zero_grad()
                 loss_tensor = criterion.forward(var_out, var_label)
@@ -100,7 +100,7 @@ def Train():
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
-                var_out, _ = model(var_image)
+                var_out, var_feat = model(var_image)
                 loss_tensor = criterion.forward(var_out, var_label)
                 loss_test.append(loss_tensor.item())
                 sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
