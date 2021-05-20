@@ -30,7 +30,7 @@ from sklearn.metrics import ndcg_score
 from config import *
 from utils.logger import get_logger
 from DataLIDC.LIDC_VR_Scan import get_train_dataloader, get_test_dataloader
-from nets.CT3DClassifier import CT3DClassifier, CircleLoss
+from nets.CT3DIRNet import CT3DIRNet, CircleLoss
 
 #command parameters
 parser = argparse.ArgumentParser(description='For LungCT')
@@ -49,7 +49,7 @@ def Train():
     print('********************load model********************')
     # initialize and load the model
     if args.model == 'CTScan':
-        model = CT3DClassifier(in_channels=1, num_classes=5)
+        model = CT3DIRNet(in_channels=1, code_size=config['CODE_SIZE'])
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)
@@ -63,7 +63,7 @@ def Train():
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
     #define loss function
-    criterion = nn.CrossEntropyLoss().cuda() #CircleLoss(scale=8).cuda()
+    criterion = CircleLoss(scale=8).cuda() #nn.CrossEntropyLoss().cuda()
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
@@ -79,7 +79,7 @@ def Train():
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
-                var_out, var_feat = model(var_image)
+                var_out = model(var_image)
                 # backward and update parameters
                 optimizer_model.zero_grad()
                 loss_tensor = criterion.forward(var_out, var_label)
@@ -100,7 +100,7 @@ def Train():
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
-                var_out, var_feat = model(var_image)
+                var_out = model(var_image)
                 loss_tensor = criterion.forward(var_out, var_label)
                 loss_test.append(loss_tensor.item())
                 sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
@@ -125,7 +125,7 @@ def Test():
 
     print('********************load model********************')
     if args.model == 'CTScan':
-        model = CT3DClassifier(in_channels=1, num_classes=5).cuda()
+        model = CT3DIRNet(in_channels=1, code_size=config['CODE_SIZE']).cuda()
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)
@@ -145,8 +145,8 @@ def Test():
     with torch.autograd.no_grad():
         for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_train):
             var_image = torch.autograd.Variable(ts_imgs).cuda()
-            _, var_feat = model(var_image)
-            tr_feat = torch.cat((tr_feat, var_feat.data), 0)
+            var_out = model(var_image)
+            tr_feat = torch.cat((tr_feat, var_out.data), 0)
             tr_label = torch.cat((tr_label, ts_label.cuda()), 0)
             tr_nodvol = torch.cat((tr_nodvol, ts_nodvol.cuda()), 0)
             sys.stdout.write('\r train set process: = {}'.format(batch_idx + 1))
@@ -158,8 +158,8 @@ def Test():
     with torch.autograd.no_grad():
         for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_test):
             var_image = torch.autograd.Variable(ts_imgs).cuda()
-            _, var_feat = model(var_image)
-            te_feat = torch.cat((te_feat, var_feat.data), 0)
+            var_out = model(var_image)
+            te_feat = torch.cat((te_feat, var_out.data), 0)
             te_label = torch.cat((te_label, ts_label.cuda()), 0)
             te_nodvol = torch.cat((te_nodvol, ts_nodvol.cuda()), 0)
             sys.stdout.write('\r test set process: = {}'.format(batch_idx + 1))

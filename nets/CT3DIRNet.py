@@ -21,7 +21,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from PIL import Image
 #define by myself
 
-#https://github.com/JielongZ/3D-UNet-PyTorch-Implementation/blob/master/unet3d_model/building_components.py
+#3DConv Feature Map
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, k_size=3, stride=1, padding=1):
         super(ConvBlock, self).__init__()
@@ -34,9 +34,9 @@ class ConvBlock(nn.Module):
         x = F.elu(x)
         return x
 
-class EncoderBlock(nn.Module):
+class Conv3DNet(nn.Module):
     def __init__(self, in_channels, model_depth=4, pool_size=2):
-        super(EncoderBlock, self).__init__()
+        super(Conv3DNet, self).__init__()
         self.root_feat_maps = 16
         self.num_conv_blocks = 2
         # self.module_list = nn.ModuleList()
@@ -62,49 +62,52 @@ class EncoderBlock(nn.Module):
                 self.module_dict["max_pooling_{}".format(depth)] = self.pooling
 
     def forward(self, x):
-        down_sampling_features = []
         for k, op in self.module_dict.items():
             if k.startswith("conv"):
                 x = op(x)
-                #print(k, x.shape)
-                if k.endswith("1"):
-                    down_sampling_features.append(x)
             elif k.startswith("max_pooling"):
                 x = op(x)
-                #print(k, x.shape)
+        return x
 
-        return x, down_sampling_features
-
-def gem3d(x, p=3, eps=1e-6):
-    return F.avg_pool3d(x.clamp(min=eps).pow(p), (x.size(-3), x.size(-2), x.size(-1))).pow(1. / p)
-
+# Generalized-Mean (GeM) pooling layer
+# https://arxiv.org/pdf/1711.02512.pdf 
 class GeM3D(nn.Module):
     def __init__(self, p=3, eps=1e-6):
         super(GeM3D, self).__init__()
         self.p = Parameter(torch.ones(1) * p)
         self.eps = eps
 
+    def _gem3d(self, x, p=3, eps=1e-6):
+        return F.avg_pool3d(x.clamp(min=eps).pow(p), (x.size(-3), x.size(-2), x.size(-1))).pow(1. / p)
+
     def forward(self, x):
-        return gem3d(x, p=self.p, eps=self.eps)
+        return self._gem3d(x, p=self.p, eps=self.eps)
 
     def __repr__(self):
         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
 
-class SpatialAttention(nn.Module):#spatial attention layer
-    def __init__(self):
-        super(SpatialAttention, self).__init__()
-
-        self.conv1 = nn.Conv2d(2, 1, kernel_size=3, padding=1, bias=False)
+#Cross-Slice Attention
+class CrossSliceAttention(nn.Module):
+    """Constructs a ECA module.
+    Args:
+        channel: Number of channels of the input feature map
+        k_size: Adaptive selection of kernel size
+    """
+    def __init__(self, channel, k_size=3):
+        super(CrossSliceAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
         self.sigmoid = nn.Sigmoid()
-        
+
     def forward(self, x):
-        avg_out = torch.mean(x, dim=2, keepdim=True)
-        max_out, _ = torch.max(x, dim=2, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=2)
-        x = torch.squeeze(x, 1)
-        x = self.conv1(x)
-        x = torch.unsqueeze(x, 1)
-        return self.sigmoid(x)
+        # feature descriptor on the global spatial information
+        y = self.avg_pool(x)
+        # Two different branches of ECA module
+        y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
+        # Multi-scale information fusion
+        y = self.sigmoid(y)
+        x = x * y.expand_as(x)
+        return x
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
 class CircleLoss(nn.Module):
@@ -145,46 +148,30 @@ class CircleLoss(nn.Module):
         loss = torch.log(1 + loss_p * loss_n)
         return loss
 
-class CT3DClassifier(nn.Module):
-    def __init__(self, in_channels, num_classes, model_depth=4, final_activation="sigmoid"):
-        super(CT3DClassifier, self).__init__()
-        self.sa = SpatialAttention()
-        self.encoder = EncoderBlock(in_channels=in_channels, model_depth=model_depth)
+class CT3DIRNet(nn.Module):
+    def __init__(self, in_channels, code_size=512, model_depth=4, final_activation="sigmoid"):
+        super(CT3DIRNet, self).__init__()
+        self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
         if final_activation == "sigmoid":
             self.sigmoid = nn.Sigmoid()
         else:
             self.softmax = nn.Softmax(dim=1)
+        self.csa =  CrossSliceAttention(channel=512)
         self.gem3d = GeM3D()
-        #self.classifier = nn.Sequential(nn.Linear(512, num_classes), nn.Softmax(dim=1))
-        self.classifier = nn.Sequential(nn.Linear(512, num_classes), nn.Sigmoid())
+        self.fc = nn.Sequential(nn.Linear(512, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
-        x = self.sa(x)*x 
-        x, downsampling_features = self.encoder(x)
+        x = self.conv3d(x)
+        x = x.squeeze(2)
+        x = self.csa(x)
+        x = x.unsqueeze(2)
         x = self.gem3d(x).view(x.size(0), -1)
-        feat = self.sigmoid(x)
-        out = self.classifier(feat)
-        return out, feat
+        x = self.fc(x)
+        return x
 
 if __name__ == "__main__":
     #for debug  
-    """
-    slice = torch.rand(16, 1, 32, 64, 64).cuda()
-    mask = torch.rand(16, 1, 32, 64, 64).cuda()
-    #encoder = EncoderBlock(in_channels=1).cuda()
-    #enc_out, enc_h = encoder(slice)
-    #decoder = DecoderBlock(out_channels=1).cuda()
-    #dec_out = decoder(enc_out, enc_h)
-    unet = CT3DUnetModel(in_channels=1, out_channels=1).cuda()
-    out, feat = unet(slice)
-    print(feat.shape)
-    dl = DiceLoss().cuda()
-    print(dl(mask, out).item())
-    """
-
-    scan =  torch.rand(16, 1, 8, 256, 256).cuda()
-    model = CT3DClassifier(in_channels=1, num_classes=5).cuda()
-    out, feat = model(scan)
-    print(feat.shape)
+    scan =  torch.rand(10, 1, 8, 256, 256)#.cuda()
+    model = CT3DIRNet(in_channels=1, code_size=32)#.cuda()
+    out = model(scan)
     print(out.shape)
-

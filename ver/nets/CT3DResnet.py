@@ -251,7 +251,7 @@ def generate_model(model_depth, **kwargs):
 
 if __name__ == "__main__":
     #for debug  
-    scan =  torch.rand(16, 1, 32, 64, 64).cuda()
+    scan =  torch.rand(16, 1, 8, 256, 256).cuda()
     model = generate_model(model_depth=101, n_input_channels=1, n_classes=5).cuda()
     out, feat = model(scan)
     print(out.shape)
