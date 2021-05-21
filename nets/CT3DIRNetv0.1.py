@@ -35,7 +35,7 @@ class ConvBlock(nn.Module):
         return x
 
 class Conv3DNet(nn.Module):
-    def __init__(self, in_channels, model_depth=4, pool_size=(1,2,2)):
+    def __init__(self, in_channels, model_depth=4, pool_size=2):
         super(Conv3DNet, self).__init__()
         self.root_feat_maps = 16
         self.num_conv_blocks = 2
@@ -58,7 +58,7 @@ class Conv3DNet(nn.Module):
             if depth == model_depth - 1:
                 break
             else:
-                self.pooling = nn.MaxPool3d(kernel_size=pool_size, stride=(1,2,2), padding=0)
+                self.pooling = nn.MaxPool3d(kernel_size=pool_size, stride=2, padding=0)
                 self.module_dict["max_pooling_{}".format(depth)] = self.pooling
 
     def forward(self, x):
@@ -101,15 +101,12 @@ class CrossSliceAttention(nn.Module):
 
     def forward(self, x):
         # feature descriptor on the global spatial information
-        B, C, D, H, W = x.shape
-        x = x.view(B, C*D, H, W)
         y = self.avg_pool(x)
         # Two different branches of ECA module
         y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
         # Multi-scale information fusion
         y = self.sigmoid(y)
         x = x * y.expand_as(x)
-        x = x.view(B, C, D, H, W)
         return x
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
@@ -224,14 +221,15 @@ class CT3DIRNet(nn.Module):
         else:
             self.softmax = nn.Softmax(dim=1)
         self.csa = CrossSliceAttention(channel=512)
-        #self.nla = NonLocalAttention(in_ch=512, k=2)
+        self.nla = NonLocalAttention(in_ch=512, k=2)
         self.gem3d = GeM3D()
         self.fc = nn.Sequential(nn.Linear(512, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
         x = self.conv3d(x)
-        x = self.csa(x)
-        #x = self.nla(x)
+        x = x.squeeze(2)
+        x = self.csa(x) + self.nla(x)
+        x = x.unsqueeze(2)
         x = self.gem3d(x).view(x.size(0), -1)
         x = self.fc(x)
         return x
