@@ -7,8 +7,8 @@ config = {
             'VOL_DIMS': 8,
             'CODE_SIZE': 8,
             'CUDA_VISIBLE_DEVICES': "0,1,2,3,4,5,6,7",
-            'MAX_EPOCHS': 50,
-            'BATCH_SIZE': 64#8
+            'MAX_EPOCHS': 20,
+            'BATCH_SIZE': 64
          } 
 
 #config for dataset

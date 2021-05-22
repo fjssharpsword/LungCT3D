@@ -88,12 +88,10 @@ class GeM3D(nn.Module):
 
 #Cross-Slice Attention
 class CrossSliceAttention(nn.Module):
-    """Constructs a ECA module.
-    Args:
-        channel: Number of channels of the input feature map
-        k_size: Adaptive selection of kernel size
+    """Constructs a CSA module.
+    Args:k_size: Adaptive selection of kernel size
     """
-    def __init__(self, channel, k_size=3):
+    def __init__(self, k_size=3):
         super(CrossSliceAttention, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
@@ -159,8 +157,8 @@ class NonLocalAttention(nn.Module): #self-attention block
         self.out_ch = in_ch
         self.mid_ch = in_ch // k
 
-        print('Num channels:  in    out    mid')
-        print('               {:>4d}  {:>4d}  {:>4d}'.format(self.in_ch, self.out_ch, self.mid_ch))
+        #print('Num channels:  in    out    mid')
+        #print('               {:>4d}  {:>4d}  {:>4d}'.format(self.in_ch, self.out_ch, self.mid_ch))
 
         self.f = nn.Sequential(
             nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1)),
@@ -180,7 +178,8 @@ class NonLocalAttention(nn.Module): #self-attention block
         self.v.apply(constant_init)
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        B, C, D, H, W = x.shape
+        x = x.view(B, C*D, H, W)
 
         f_x = self.f(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
         g_x = self.g(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
@@ -193,9 +192,11 @@ class NonLocalAttention(nn.Module): #self-attention block
         z = z.permute(0, 2, 1).view(B, self.mid_ch, H, W)  # B * mid_ch * H * W
 
         z = self.v(z)
-        z = torch.add(z, x) # z + x
+        x = torch.add(z, x) # z + x
 
-        return z
+        x = x.view(B, C, D, H, W)
+
+        return x
 
 ## Kaiming weight initialisation
 def weights_init(module):
@@ -223,15 +224,15 @@ class CT3DIRNet(nn.Module):
             self.sigmoid = nn.Sigmoid()
         else:
             self.softmax = nn.Softmax(dim=1)
-        self.csa = CrossSliceAttention(channel=512)
-        #self.nla = NonLocalAttention(in_ch=512, k=2)
+        self.nla = NonLocalAttention(in_ch=512*8, k=2)
+        self.csa = CrossSliceAttention()
         self.gem3d = GeM3D()
         self.fc = nn.Sequential(nn.Linear(512, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
         x = self.conv3d(x)
         x = self.csa(x)
-        #x = self.nla(x)
+        x = self.nla(x)
         x = self.gem3d(x).view(x.size(0), -1)
         x = self.fc(x)
         return x
@@ -239,6 +240,6 @@ class CT3DIRNet(nn.Module):
 if __name__ == "__main__":
     #for debug  
     scan =  torch.rand(10, 1, 8, 256, 256)#.cuda()
-    model = CT3DIRNet(in_channels=1, code_size=32)#.cuda()
+    model = CT3DIRNet(in_channels=1, code_size=8)#.cuda()
     out = model(scan)
     print(out.shape)
