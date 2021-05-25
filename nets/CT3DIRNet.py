@@ -71,17 +71,18 @@ class Conv3DNet(nn.Module):
 
 # Generalized-Mean (GeM) pooling layer
 # https://arxiv.org/pdf/1711.02512.pdf 
-class GeM3D(nn.Module):
+class GeMLayer(nn.Module):
     def __init__(self, p=3, eps=1e-6):
-        super(GeM3D, self).__init__()
+        super(GeMLayer, self).__init__()
         self.p = Parameter(torch.ones(1) * p)
         self.eps = eps
 
-    def _gem3d(self, x, p=3, eps=1e-6):
-        return F.avg_pool3d(x.clamp(min=eps).pow(p), (x.size(-3), x.size(-2), x.size(-1))).pow(1. / p)
+    def _gem(self, x, p=3, eps=1e-6):
+        #return F.avg_pool3d(x.clamp(min=eps).pow(p), (x.size(-3), x.size(-2), x.size(-1))).pow(1. / p)
+        return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1. / p)
 
     def forward(self, x):
-        return self._gem3d(x, p=self.p, eps=self.eps)
+        return self._gem(x, p=self.p, eps=self.eps)
 
     def __repr__(self):
         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
@@ -99,15 +100,12 @@ class CrossSliceAttention(nn.Module):
 
     def forward(self, x):
         # feature descriptor on the global spatial information
-        B, C, D, H, W = x.shape
-        x = x.view(B, C*D, H, W)
         y = self.avg_pool(x)
         # Two different branches of ECA module
         y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
         # Multi-scale information fusion
         y = self.sigmoid(y)
         x = x * y.expand_as(x)
-        x = x.view(B, C, D, H, W)
         return x
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
@@ -178,8 +176,7 @@ class NonLocalAttention(nn.Module): #self-attention block
         self.v.apply(constant_init)
 
     def forward(self, x):
-        B, C, D, H, W = x.shape
-        x = x.view(B, C*D, H, W)
+        B, C, H, W = x.shape
 
         f_x = self.f(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
         g_x = self.g(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
@@ -193,9 +190,6 @@ class NonLocalAttention(nn.Module): #self-attention block
 
         z = self.v(z)
         x = torch.add(z, x) # z + x
-
-        x = x.view(B, C, D, H, W)
-
         return x
 
 ## Kaiming weight initialisation
@@ -224,16 +218,16 @@ class CT3DIRNet(nn.Module):
             self.sigmoid = nn.Sigmoid()
         else:
             self.softmax = nn.Softmax(dim=1)
-        self.nla = NonLocalAttention(in_ch=512*8, k=2)
         self.csa = CrossSliceAttention()
-        self.gem3d = GeM3D()
-        self.fc = nn.Sequential(nn.Linear(512, code_size), nn.Sigmoid()) #for metricl learning
+        self.gem = GeMLayer()
+        self.fc = nn.Sequential(nn.Linear(512*8, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
         x = self.conv3d(x)
+        B, C, D, H, W = x.shape
+        x = x.view(B, C*D, H, W)
         x = self.csa(x)
-        x = self.nla(x)
-        x = self.gem3d(x).view(x.size(0), -1)
+        x = self.gem(x).view(x.size(0), -1)
         x = self.fc(x)
         return x
 

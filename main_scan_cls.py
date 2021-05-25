@@ -119,8 +119,8 @@ def Train():
 
 def Test():
     print('********************load data********************')
-    dataloader_train = get_train_dataloader(batch_size=config['BATCH_SIZE'], shuffle=False, num_workers=8)
-    dataloader_test = get_test_dataloader(batch_size=config['BATCH_SIZE'], shuffle=False, num_workers=8)
+    dataloader_train = get_train_dataloader(batch_size=8, shuffle=False, num_workers=8) #config['BATCH_SIZE']
+    dataloader_test = get_test_dataloader(batch_size=8, shuffle=False, num_workers=8)
     print('********************load data succeed!********************')
 
     print('********************load model********************')
@@ -189,7 +189,15 @@ def Test():
             for j in idxs:
                 rank_pos = rank_pos + 1
                 tr_idx = tr_label[j]#tr_label[j,:][0]
-                if te_idx == tr_idx:  #hit
+                if te_idx in [0,1] and tr_idx in [0, 1]:  #hit
+                    num_pos = num_pos +1
+                    mAP.append(num_pos/rank_pos)
+                    pd_rank.append(gt_rel[j])
+                elif te_idx in [3, 4] and tr_idx in [3, 4]: #hit
+                    num_pos = num_pos +1
+                    mAP.append(num_pos/rank_pos)
+                    pd_rank.append(gt_rel[j])
+                elif te_idx == 2 and tr_idx == 2:
                     num_pos = num_pos +1
                     mAP.append(num_pos/rank_pos)
                     pd_rank.append(gt_rel[j])
