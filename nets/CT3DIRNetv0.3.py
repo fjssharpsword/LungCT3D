@@ -109,6 +109,57 @@ class Conv3DNet(nn.Module):
                 x = op(x)
         return x
 
+# Generalized-Mean (GeM) pooling layer
+# https://arxiv.org/pdf/1711.02512.pdf 
+class GeMLayer(nn.Module):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeMLayer, self).__init__()
+        self.p = Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def _gem(self, x, p=3, eps=1e-6):
+        return F.avg_pool3d(x.clamp(min=eps).pow(p), (x.size(-3), x.size(-2), x.size(-1))).pow(1. / p)
+        #return F.avg_pool2d(x.clamp(min=eps).pow(p), (x.size(-2), x.size(-1))).pow(1. / p)
+
+    def forward(self, x):
+        return self._gem(x, p=self.p, eps=self.eps)
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
+
+#Cross-Slice Attention
+class CrossSliceAttention(nn.Module):
+    """ Constructs a CSA module.
+        Args:k_size: Adaptive selection of kernel size
+    """
+    def __init__(self, k_size=3):
+        super(CrossSliceAttention, self).__init__()
+        self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
+        #self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        #cross-channel
+        y = self.avg_3dpool(x) 
+        y = y.squeeze(-1).squeeze(-1).transpose(-1, -2) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)
+        y = self.conv(y) #linear projection
+        y = y.transpose(-1, -2).unsqueeze(-1).unsqueeze(-1) #(B, 1, C)-> (B, C, 1) -> (B, C, 1, 1, 1)
+        y = self.sigmoid(y)
+        x = x * y.expand_as(x)# Multi-scale information fusion
+        """
+        #cross-slice
+        B, C, D, H, W = x.shape
+        y = x.view(B, C*D, H, W)
+        y = self.avg_2dpool(y)
+        y = y.squeeze(-1).view(B, C, D)
+        z = torch.bmm(y.permute(0, 2, 1), y)
+        z = torch.bmm(y, z)
+        z = z.unsqueeze(-1).unsqueeze(-1)
+        x = x * z.expand_as(x)
+        #x = z.view(z.size(0), -1)
+        """
+        return x
 
 class CT3DIRNet(nn.Module):
     def __init__(self, in_channels, code_size=512, model_depth=4):
@@ -117,19 +168,23 @@ class CT3DIRNet(nn.Module):
         self.sigmoid = nn.Sigmoid()
         self.trans_enc = nn.TransformerEncoderLayer(d_model=512, nhead=8)
         self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
+        self.csa = CrossSliceAttention()
+        self.gem = GeMLayer()
+        self.fc = nn.Sequential(nn.Linear(512*8, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
         x = self.conv3d(x)
-  
+        """
         B, C, D, H, W = x.shape
         y = x.view(B, C*D, H, W)
         y = self.avg_2dpool(y)
         y = y.squeeze(-1).view(B, C, D).transpose(-1, -2)
         y = self.trans_enc(y)
-
-        x = torch.mean(y, dim=2, keepdim=True)
-        x = x.squeeze(-1)
-
+        x = y.view(y.size(0), -1)
+        """
+        x = self.csa(x)
+        x = self.gem(x).view(x.size(0), -1)
+        x = self.fc(x)
         return x
 
 if __name__ == "__main__":
