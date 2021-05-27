@@ -114,11 +114,6 @@ class DatasetGenerator(Dataset):
     def __len__(self):
         return len(self.vol_ids)
 
-"""
-def collate_fn(batch):
-    return tuple(zip(*batch))
- #DataLoader: collate_fn=collate_fn
-"""
 PATH_TO_DICOM_INFO = '/data/pycode/LungCT3D/DataLIDC/LIDC_DICOM_info.txt'
 PATH_TO_TRAIN_FILE = '/data/pycode/LungCT3D/DataLIDC/LIDC_VR_Train.txt'
 def get_train_dataloader(batch_size, shuffle, num_workers):
@@ -135,10 +130,10 @@ def get_test_dataloader(batch_size, shuffle, num_workers):
 if __name__ == "__main__":
 
     #for debug   
-    datasets = get_test_dataloader(batch_size=64, shuffle=True, num_workers=8)
+    datasets = get_train_dataloader(batch_size=16, shuffle=True, num_workers=0)
     for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(datasets):
         print(ts_imgs.shape)
         print(ts_masks.shape)
         print(ts_label.shape)
         print(ts_nodvol.shape)
-        #break
+        break

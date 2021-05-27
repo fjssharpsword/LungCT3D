@@ -170,7 +170,7 @@ class CT3DIRNet(nn.Module):
         self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
         self.csa = CrossSliceAttention()
         self.gem = GeMLayer()
-        self.fc = nn.Sequential(nn.Linear(512*8, code_size), nn.Sigmoid()) #for metricl learning
+        self.fc = nn.Sequential(nn.Linear(512, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
         x = self.conv3d(x)
