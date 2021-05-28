@@ -82,32 +82,34 @@ class DatasetGenerator(Dataset):
         """
         #get image
         vol_imgs =  self.vol_imgs[index]
+        vol_masks = self.vol_masks[index]
         ts_imgs = torch.FloatTensor()
-        for img in vol_imgs:
+        ts_masks = torch.FloatTensor()
+        for img, mask in zip(vol_imgs, vol_masks):
             img = np.load(img)
+            mask = np.load(mask)
+            ind = mask.nonzero()#img = img * mask
+            x_min, x_max, y_min, y_max = ind[0].min(), ind[0].max(), ind[1].min(), ind[1].max()#print(img[ind])
+            img =  img[x_min-1:x_max+1, y_min-1:y_max+1]
+            img = zoom(img, (config['VOL_DIMS']/img.shape[0], config['VOL_DIMS']/img.shape[1]), order=1)
             img = torch.as_tensor(img, dtype=torch.float32)
             ts_imgs = torch.cat((ts_imgs, img.unsqueeze(0)), 0)
-        ts_imgs = zoom(ts_imgs, (config['VOL_DIMS']/ts_imgs.shape[0], 0.5, 0.5), order=1)
-        ts_imgs = torch.as_tensor(ts_imgs, dtype=torch.float32)
-        ts_imgs = ts_imgs.unsqueeze(0) #CxNxDxHxW
-        #get masks
-        vol_masks = self.vol_masks[index]
-        ts_masks = torch.FloatTensor()
-        for mask in vol_masks:
-            mask = np.load(mask)
+            mask = mask[x_min-1:x_max+1, y_min-1:y_max+1]
+            mask = zoom(mask, (config['VOL_DIMS']/mask.shape[0], config['VOL_DIMS']/mask.shape[1]), order=1)
             mask = torch.as_tensor(mask, dtype=torch.float32)
             ts_masks = torch.cat((ts_masks, mask.unsqueeze(0)), 0)
+        ts_imgs = zoom(ts_imgs, (config['VOL_DIMS']/(2*ts_imgs.shape[0]), 1, 1), order=1)
+        ts_imgs = torch.as_tensor(ts_imgs, dtype=torch.float32)
+        ts_imgs = ts_imgs.unsqueeze(0) #CxDXHxW
+        ts_masks = zoom(ts_masks, (config['VOL_DIMS']/(2*ts_masks.shape[0]), 1, 1), order=1)
+        ts_masks = torch.as_tensor(ts_masks, dtype=torch.float32)
+        ts_masks = ts_masks.unsqueeze(0)#CxDXHxW
+    
         #calculate the volume of nodule
         pixelspacing = self.vol_pixelspacings[index]
         nod_vol = pixelspacing * torch.sum(ts_masks)
         ts_nodvol = torch.as_tensor(nod_vol, dtype=torch.float32)
-        #resize the depth of scan
-        ts_masks = zoom(ts_masks, (config['VOL_DIMS']/ts_masks.shape[0], 0.5, 0.5), order=1)
-        ts_masks = torch.as_tensor(ts_masks, dtype=torch.float32)
-        ts_masks = ts_masks.unsqueeze(0)#CxNxDxHxW
         #get label
-        #ts_label = torch.as_tensor(self.vol_labels[index], dtype=torch.float32) 
-        #ts_label = torch.LongTensor(self.vol_labels[index][0])
         ts_label = torch.as_tensor(self.vol_labels[index][0], dtype=torch.long) 
         return ts_imgs, ts_masks, ts_label, ts_nodvol
 
@@ -141,4 +143,4 @@ if __name__ == "__main__":
         print(ts_masks.shape)
         print(ts_label.shape)
         print(ts_nodvol.shape)
-        #break
+        break

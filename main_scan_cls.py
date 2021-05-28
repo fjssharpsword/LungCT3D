@@ -49,7 +49,7 @@ def Train():
     print('********************load model********************')
     # initialize and load the model
     if args.model == 'CTScan':
-        model = CT3DIRNet(in_channels=1, code_size=config['CODE_SIZE'])
+        model = CT3DIRNet(k_size=5, code_size=config['CODE_SIZE'])
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)
@@ -68,6 +68,7 @@ def Train():
 
     print('********************begin training!********************')
     loss_min = float('inf')
+    
     for epoch in range(config['MAX_EPOCHS']):
         since = time.time()
         print('Epoch {}/{}'.format(epoch+1 , config['MAX_EPOCHS']))
@@ -125,7 +126,7 @@ def Test():
 
     print('********************load model********************')
     if args.model == 'CTScan':
-        model = CT3DIRNet(in_channels=1, code_size=config['CODE_SIZE']).cuda()
+        model = CT3DIRNet(k_size=5, code_size=config['CODE_SIZE']).cuda()
         CKPT_PATH = config['CKPT_PATH'] + args.model + '_best.pkl'
         if os.path.exists(CKPT_PATH):
             checkpoint = torch.load(CKPT_PATH)

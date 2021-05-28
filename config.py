@@ -4,11 +4,11 @@ config = {
             'CKPT_PATH': '/data/pycode/LungCT3D/ckpt/',
             'log_path':  '/data/pycode/LungCT3D/log/',
             'img_path': '/data/pycode/LungCT3D/imgs/',
-            'VOL_DIMS': 8,
+            'VOL_DIMS':  64,
             'CODE_SIZE': 8,
             'CUDA_VISIBLE_DEVICES': "0,1,2,3,4,5,6,7",
             'MAX_EPOCHS': 20,
-            'BATCH_SIZE': 64
+            'BATCH_SIZE': 256
          } 
 
 #config for dataset
