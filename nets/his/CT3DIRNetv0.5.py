@@ -107,10 +107,10 @@ class CT3DIRNet(nn.Module):
                           nn.Conv1d(1, 1, kernel_size=k_size, stride=(k_size - 1) // 2, padding=(k_size - 1) // 2, bias=False),
                           nn.Conv1d(1, 1, kernel_size=k_size, stride=(k_size - 1) // 2, padding=(k_size - 1) // 2, bias=False)
                           )
-        self.bn = nn.BatchNorm1d(4096)
-        self.pos_embedding = nn.Parameter(torch.randn(1, 8, 4096))
-        self.trans_enc = nn.TransformerEncoderLayer(d_model=4096, nhead=8)
-        self.fc = nn.Sequential(nn.Linear(4096*8, code_size), nn.Sigmoid()) #for metricl learning
+        self.bn = nn.BatchNorm1d(256)
+        self.pos_embedding = nn.Parameter(torch.randn(1, 32, 256))
+        self.trans_enc = nn.TransformerEncoderLayer(d_model=256*2, nhead=8)
+        self.fc = nn.Sequential(nn.Linear(32*32, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
         x = x.permute(0, 2, 1, 3, 4)
@@ -120,8 +120,14 @@ class CT3DIRNet(nn.Module):
         x = x.squeeze()
         x = self.bn(x)
         x = x.view(B, D, -1)
-        x = x * self.pos_embedding.expand_as(x) 
+        pos = self.pos_embedding.expand_as(x) 
+        x = torch.cat((x, pos), dim=2)
         x = self.trans_enc(x)
+        B, D, HW = x.shape
+        x = x.view(B*D, 1, HW)
+        x = self.linear_pro(x)
+        x = x.squeeze()
+        x = x.view(B, D, -1)
         x = x.view(B, -1)
         x = self.fc(x)
 
@@ -131,7 +137,7 @@ class CT3DIRNet(nn.Module):
 
 if __name__ == "__main__":
     #for debug  
-    scan =  torch.rand(10, 1, 8, 256, 256)#.cuda()
+    scan =  torch.rand(10, 1, 32, 64, 64)#.cuda()
     model = CT3DIRNet(k_size = 5, code_size = 128)#.cuda()
     out = model(scan)
     print(out.shape)

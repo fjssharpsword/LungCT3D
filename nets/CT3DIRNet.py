@@ -6,7 +6,6 @@ Update time: 12/05/2021
 """
 import re
 import numpy as np
-import math
 import torch
 import torch.nn as nn
 import torchvision
@@ -61,6 +60,54 @@ class CircleLoss(nn.Module):
         loss = torch.log(1 + loss_p * loss_n)
         return loss
 
+#3DConv Feature Map
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, k_size=3, stride=1, padding=1):
+        super(ConvBlock, self).__init__()
+        self.conv3d = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size,
+                                stride=stride, padding=padding)
+        self.batch_norm = nn.BatchNorm3d(num_features=out_channels)
+
+    def forward(self, x):
+        x = self.batch_norm(self.conv3d(x))
+        x = F.elu(x)
+        return x
+
+class Conv3DNet(nn.Module):
+    def __init__(self, in_channels, model_depth=4, pool_size=(2,2,2)):
+        super(Conv3DNet, self).__init__()
+        self.root_feat_maps = 16
+        self.num_conv_blocks = 2
+        # self.module_list = nn.ModuleList()
+        self.module_dict = nn.ModuleDict()
+        for depth in range(model_depth):
+            feat_map_channels = 2 ** (depth + 1) * self.root_feat_maps
+            for i in range(self.num_conv_blocks):
+                # print("depth {}, conv {}".format(depth, i))
+                if depth == 0:
+                    # print(in_channels, feat_map_channels)
+                    self.conv_block = ConvBlock(in_channels=in_channels, out_channels=feat_map_channels)
+                    self.module_dict["conv_{}_{}".format(depth, i)] = self.conv_block
+                    in_channels, feat_map_channels = feat_map_channels, feat_map_channels * 2
+                else:
+                    # print(in_channels, feat_map_channels)
+                    self.conv_block = ConvBlock(in_channels=in_channels, out_channels=feat_map_channels)
+                    self.module_dict["conv_{}_{}".format(depth, i)] = self.conv_block
+                    in_channels, feat_map_channels = feat_map_channels, feat_map_channels * 2
+            if depth == model_depth - 1:
+                break
+            else:
+                self.pooling = nn.MaxPool3d(kernel_size=pool_size, stride=(2,2,2), padding=0)
+                self.module_dict["max_pooling_{}".format(depth)] = self.pooling
+
+    def forward(self, x):
+        for k, op in self.module_dict.items():
+            if k.startswith("conv"):
+                x = op(x)
+            elif k.startswith("max_pooling"):
+                x = op(x)
+        return x
+
 # Generalized-Mean (GeM) pooling layer
 # https://arxiv.org/pdf/1711.02512.pdf 
 class GeMLayer(nn.Module):
@@ -79,67 +126,46 @@ class GeMLayer(nn.Module):
     def __repr__(self):
         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
 
-def positionalencoding1d(d_model, length):
-        """
-        #https://github.com/wzlxjtu/PositionalEncoding2D
-        :param d_model: dimension of the model
-        :param length: length of positions
-        :return: length*d_model position matrix
-        """
-        if d_model % 2 != 0:
-            raise ValueError("Cannot use sin/cos positional encoding with "
-                            "odd dim (got dim={:d})".format(d_model))
-        pe = torch.zeros(length, d_model)
-        position = torch.arange(0, length).unsqueeze(1)
-        div_term = torch.exp((torch.arange(0, d_model, 2, dtype=torch.float) * -(math.log(10000.0) / d_model)))
-        pe[:, 0::2] = torch.sin(position.float() * div_term)
-        pe[:, 1::2] = torch.cos(position.float() * div_term)
-
-        return pe
-
-class CT3DIRNet(nn.Module):
-    def __init__(self, k_size = 5, code_size= 128):
-        super(CT3DIRNet, self).__init__()
-
-        self.linear_pro = nn.Sequential(
-                          nn.Conv1d(1, 1, kernel_size=k_size, stride=(k_size - 1) // 2, padding=(k_size - 1) // 2, bias=False),
-                          nn.Conv1d(1, 1, kernel_size=k_size, stride=(k_size - 1) // 2, padding=(k_size - 1) // 2, bias=False),
-                          nn.Conv1d(1, 1, kernel_size=k_size, stride=(k_size - 1) // 2, padding=(k_size - 1) // 2, bias=False),
-                          nn.Conv1d(1, 1, kernel_size=k_size, stride=(k_size - 1) // 2, padding=(k_size - 1) // 2, bias=False)
-                          )
-        self.bn = nn.BatchNorm1d(256)
-        self.pos_embedding = nn.Parameter(torch.randn(1, 32, 256))
-        self.trans_enc = nn.TransformerEncoderLayer(d_model=256*2, nhead=8)
-        self.fc = nn.Sequential(nn.Linear(32*32, code_size), nn.Sigmoid()) #for metricl learning
+#Cross-Slice Attention
+class CrossSliceAttention(nn.Module):
+    """ Constructs a CSA module.
+        Args:k_size: Adaptive selection of kernel size
+    """
+    def __init__(self, k_size=3):
+        super(CrossSliceAttention, self).__init__()
+        self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
+        #self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        x = x.permute(0, 2, 1, 3, 4)
-        B, D, C, H, W = x.shape
-        x = x.view(B*D, C, H*W)
-        x = self.linear_pro(x)
-        x = x.squeeze()
-        x = self.bn(x)
-        x = x.view(B, D, -1)
-        pos = self.pos_embedding.expand_as(x) 
-        x = torch.cat((x, pos), dim=2)
-        x = self.trans_enc(x)
-        B, D, HW = x.shape
-        x = x.view(B*D, 1, HW)
-        x = self.linear_pro(x)
-        x = x.squeeze()
-        x = x.view(B, D, -1)
-        x = x.view(B, -1)
-        x = self.fc(x)
-
+        #cross-channel
+        y = self.avg_3dpool(x) 
+        y = y.squeeze(-1).squeeze(-1).transpose(-1, -2) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)
+        y = self.conv(y) #linear projection
+        y = y.transpose(-1, -2).unsqueeze(-1).unsqueeze(-1) #(B, 1, C)-> (B, C, 1) -> (B, C, 1, 1, 1)
+        y = self.sigmoid(y)
+        x = x * y.expand_as(x)# Multi-scale information fusion
         return x
 
+class CT3DIRNet(nn.Module):
+    def __init__(self, in_channels, code_size=512, model_depth=4):
+        super(CT3DIRNet, self).__init__()
+        self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
+        self.csa = CrossSliceAttention()
+        self.gem = GeMLayer()
+        self.fc = nn.Sequential(nn.Linear(512, code_size), nn.Sigmoid()) #for metricl learning
 
+    def forward(self, x):
+        x = self.conv3d(x)
+        x = self.csa(x)
+        x = self.gem(x).view(x.size(0), -1)
+        x = self.fc(x)
+        return x
 
 if __name__ == "__main__":
     #for debug  
-    scan =  torch.rand(10, 1, 32, 64, 64)#.cuda()
-    model = CT3DIRNet(k_size = 5, code_size = 128)#.cuda()
+    scan =  torch.rand(10, 1, 8, 32, 32)#.cuda()
+    model = CT3DIRNet(in_channels=1, code_size=8)#.cuda()
     out = model(scan)
     print(out.shape)
-
-    
