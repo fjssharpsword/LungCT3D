@@ -29,7 +29,7 @@ from sklearn.metrics import ndcg_score
 #self-defined
 from config import *
 from utils.logger import get_logger
-from DataLIDC.LIDC_VR_Scan import get_train_dataloader, get_test_dataloader
+from data_lidc.LIDC_VR_Scan import get_train_dataloader, get_test_dataloader
 from nets.CT3DIRNet import CT3DIRNet, CircleLoss
 
 #command parameters

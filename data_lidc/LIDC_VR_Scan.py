@@ -91,17 +91,17 @@ class DatasetGenerator(Dataset):
             ind = mask.nonzero()#img = img * mask
             x_min, x_max, y_min, y_max = ind[0].min(), ind[0].max(), ind[1].min(), ind[1].max()#print(img[ind])
             img =  img[x_min-1:x_max+1, y_min-1:y_max+1]
-            img = zoom(img, (config['VOL_DIMS']/img.shape[0], config['VOL_DIMS']/img.shape[1]), order=1)
+            img = zoom(img, (config['VOL_DIMS'][1]/img.shape[0], config['VOL_DIMS'][2]/img.shape[1]), order=1)
             img = torch.as_tensor(img, dtype=torch.float32)
             ts_imgs = torch.cat((ts_imgs, img.unsqueeze(0)), 0)
             mask = mask[x_min-1:x_max+1, y_min-1:y_max+1]
-            mask = zoom(mask, (config['VOL_DIMS']/mask.shape[0], config['VOL_DIMS']/mask.shape[1]), order=1)
+            mask = zoom(mask, (config['VOL_DIMS'][1]/mask.shape[0], config['VOL_DIMS'][2]/mask.shape[1]), order=1)
             mask = torch.as_tensor(mask, dtype=torch.float32)
             ts_masks = torch.cat((ts_masks, mask.unsqueeze(0)), 0)
-        ts_imgs = zoom(ts_imgs, (config['VOL_DIMS']/(2*ts_imgs.shape[0]), 1, 1), order=1)
+        ts_imgs = zoom(ts_imgs, (config['VOL_DIMS'][0]/ts_imgs.shape[0], 1, 1), order=1)
         ts_imgs = torch.as_tensor(ts_imgs, dtype=torch.float32)
         ts_imgs = ts_imgs.unsqueeze(0) #CxDXHxW
-        ts_masks = zoom(ts_masks, (config['VOL_DIMS']/(2*ts_masks.shape[0]), 1, 1), order=1)
+        ts_masks = zoom(ts_masks, (config['VOL_DIMS'][0]/ts_masks.shape[0], 1, 1), order=1)
         ts_masks = torch.as_tensor(ts_masks, dtype=torch.float32)
         ts_masks = ts_masks.unsqueeze(0)#CxDXHxW
     
@@ -121,14 +121,14 @@ def collate_fn(batch):
     return tuple(zip(*batch))
  #DataLoader: collate_fn=collate_fn
 """
-PATH_TO_DICOM_INFO = '/data/pycode/LungCT3D/DataLIDC/LIDC_DICOM_info.txt'
-PATH_TO_TRAIN_FILE = '/data/pycode/LungCT3D/DataLIDC/LIDC_VR_Train.txt'
+PATH_TO_DICOM_INFO = '/data/pycode/LungCT3D/data_lidc/LIDC_DICOM_info.txt'
+PATH_TO_TRAIN_FILE = '/data/pycode/LungCT3D/data_lidc/LIDC_VR_Train.txt'
 def get_train_dataloader(batch_size, shuffle, num_workers):
     dataset_train = DatasetGenerator(path_to_dataset_file=PATH_TO_TRAIN_FILE)
     data_loader_train = DataLoader(dataset=dataset_train, batch_size=batch_size,shuffle=shuffle, num_workers=num_workers, pin_memory=True)
     return data_loader_train
 
-PATH_TO_TEST_FILE = '/data/pycode/LungCT3D/DataLIDC/LIDC_VR_Test.txt'
+PATH_TO_TEST_FILE = '/data/pycode/LungCT3D/data_lidc/LIDC_VR_Test.txt'
 def get_test_dataloader(batch_size, shuffle, num_workers):
     dataset_test = DatasetGenerator(path_to_dataset_file=PATH_TO_TEST_FILE)
     data_loader_test = DataLoader(dataset=dataset_test, batch_size=batch_size,shuffle=shuffle, num_workers=num_workers, pin_memory=True)

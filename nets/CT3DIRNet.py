@@ -2,7 +2,7 @@
 """
 3D UNet
 Author: Jason.Fang
-Update time: 12/05/2021
+Update time: 06/06/2021
 """
 import re
 import numpy as np
@@ -126,13 +126,14 @@ class GeMLayer(nn.Module):
     def __repr__(self):
         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
 
-#Cross-Slice Attention
-class CrossSliceAttention(nn.Module):
-    """ Constructs a CSA module.
+
+#Cross-channel Attention
+class CrossChannelAttention(nn.Module):
+    """ Constructs a CCA module.
         Args:k_size: Adaptive selection of kernel size
     """
     def __init__(self, k_size=3):
-        super(CrossSliceAttention, self).__init__()
+        super(CrossChannelAttention, self).__init__()
         self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
         #self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
@@ -148,24 +149,101 @@ class CrossSliceAttention(nn.Module):
         x = x * y.expand_as(x)# Multi-scale information fusion
         return x
 
+#Cross-spatial Attention
+class CrossSpatialAttention(nn.Module): #self-attention block
+    def __init__(self, in_ch, k):
+        super(CrossSpatialAttention, self).__init__()
+
+        self.in_ch = in_ch
+        self.out_ch = in_ch
+        self.mid_ch = in_ch // k
+
+        #print('Num channels:  in    out    mid')
+        #print('               {:>4d}  {:>4d}  {:>4d}'.format(self.in_ch, self.out_ch, self.mid_ch))
+
+        self.f = nn.Sequential(
+            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
+            nn.BatchNorm3d(self.mid_ch),
+            nn.ReLU())
+        self.g = nn.Sequential(
+            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
+            nn.BatchNorm3d(self.mid_ch),
+            nn.ReLU())
+        self.h = nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1))
+        self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
+
+        self.softmax = nn.Softmax(dim=-1)
+
+        for conv in [self.f, self.g, self.h]: 
+            conv.apply(weights_init)
+        self.v.apply(constant_init)
+
+    def forward(self, x):
+        B, C, D, H, W = x.shape
+
+        f_x = self.f(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
+        g_x = self.g(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
+        h_x = self.h(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
+
+        z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
+        attn = self.softmax((self.mid_ch ** -.50) * z)
+
+        z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W
+        z = z.permute(0, 2, 1).view(B, self.mid_ch, D, H, W)  # B * mid_ch * D * H * W
+
+        z = self.v(z)
+        x = torch.add(z, x) # z + x
+        return x
+
+## Kaiming weight initialisation
+def weights_init(module):
+    if isinstance(module, nn.ReLU):
+        pass
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
+        nn.init.kaiming_normal_(module.weight.data)
+        nn.init.constant_(module.bias.data, 0.0)
+    elif isinstance(module, nn.BatchNorm2d):
+        pass
+def constant_init(module):
+    if isinstance(module, nn.ReLU):
+        pass
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
+        nn.init.constant_(module.weight.data, 0.0)
+        nn.init.constant_(module.bias.data, 0.0)
+    elif isinstance(module, nn.BatchNorm2d):
+        pass
+
 class CT3DIRNet(nn.Module):
     def __init__(self, in_channels, code_size=512, model_depth=4):
         super(CT3DIRNet, self).__init__()
         self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
-        self.csa = CrossSliceAttention()
+        self.cca = CrossChannelAttention() #3D cross-channel attention
+        self.csa = CrossSpatialAttention(in_ch=512, k=2) #3D cross-spatial attention
         self.gem = GeMLayer()
-        self.fc = nn.Sequential(nn.Linear(512, code_size), nn.Sigmoid()) #for metricl learning
+        #self.fc = nn.Sequential(nn.Linear(512+1000, code_size), nn.Sigmoid()) #for metricl learning
 
     def forward(self, x):
         x = self.conv3d(x)
-        x = self.csa(x)
-        x = self.gem(x).view(x.size(0), -1)
-        x = self.fc(x)
+
+        #channel-wise
+        x_c = self.cca(x) 
+        x_c = self.gem(x_c).view(x_c.size(0), -1)
+
+        #spatial-wise
+        x_s = self.csa(x)
+        x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
+        x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
+        x_s = self.gem(x_s).view(x_s.size(0), -1)
+
+        #concate
+        x = torch.cat((x_c, x_s),1)
+        #x = self.fc(x)
+
         return x
 
 if __name__ == "__main__":
     #for debug  
-    scan =  torch.rand(10, 1, 8, 32, 32)#.cuda()
-    model = CT3DIRNet(in_channels=1, code_size=8)#.cuda()
+    scan =  torch.rand(10, 1, 80, 80, 80).cuda()
+    model = CT3DIRNet(in_channels=1, code_size=8).cuda()
     out = model(scan)
     print(out.shape)
