@@ -137,7 +137,7 @@ def get_test_dataloader(batch_size, shuffle, num_workers):
 if __name__ == "__main__":
 
     #for debug   
-    datasets = get_test_dataloader(batch_size=64, shuffle=True, num_workers=8)
+    datasets = get_test_dataloader(batch_size=10, shuffle=True, num_workers=8)
     for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(datasets):
         print(ts_imgs.shape)
         print(ts_masks.shape)
