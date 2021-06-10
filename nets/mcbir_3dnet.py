@@ -21,7 +21,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from PIL import Image
 #define by myself
 from nets.bayes_conv import BayesConv2d
+from nets.spectral_normalization import SpectralNorm
 #from bayes_conv import BayesConv2d
+#from spectral_normalization import SpectralNorm
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
 class CircleLoss(nn.Module):
@@ -128,10 +130,10 @@ class GeMLayer(nn.Module):
     def __repr__(self):
         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
 
-#Cross-spatial Attention
-class CrossSpatialAttention(nn.Module): #self-attention block
+#Spatial-wise Spectral Attention
+class SpatialSpectralAttention(nn.Module): 
     def __init__(self, in_ch, k):
-        super(CrossSpatialAttention, self).__init__()
+        super(SpatialSpectralAttention, self).__init__()
 
         self.in_ch = in_ch
         self.out_ch = in_ch
@@ -151,7 +153,8 @@ class CrossSpatialAttention(nn.Module): #self-attention block
         self.h = nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1))
         self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
 
-        self.softmax = nn.Softmax(dim=-1)
+        #self.softmax = nn.Softmax(dim=-1)
+        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, 3, stride=1, padding=1))
 
         for conv in [self.f, self.g, self.h]: 
             conv.apply(weights_init)
@@ -165,7 +168,8 @@ class CrossSpatialAttention(nn.Module): #self-attention block
         h_x = self.h(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
 
         z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
-        attn = self.softmax((self.mid_ch ** -.50) * z)
+        #attn = self.softmax((self.mid_ch ** -.50) * z)
+        attn = self.spe_norm(z.unsqueeze(1)).squeeze()
 
         z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W
         z = z.permute(0, 2, 1).view(B, self.mid_ch, D, H, W)  # B * mid_ch * D * H * W
@@ -219,7 +223,7 @@ class MCBIR3DNet(nn.Module):
         super(MCBIR3DNet, self).__init__()
         self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
         self.cba = ChannelBayesAttention() 
-        self.csa = CrossSpatialAttention(in_ch=512, k=2) #3D cross-spatial attention
+        self.ssa = SpatialSpectralAttention(in_ch=512, k=2) #3D cross-spatial attention
         self.gem = GeMLayer()
 
     def forward(self, x):
@@ -230,7 +234,7 @@ class MCBIR3DNet(nn.Module):
         x_c = self.gem(x_c).view(x_c.size(0), -1)
 
         #spatial-wise
-        x_s = self.csa(x)
+        x_s = self.ssa(x)
         x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
         x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
         x_s = self.gem(x_s).view(x_s.size(0), -1)
