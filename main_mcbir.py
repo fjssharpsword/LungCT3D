@@ -80,10 +80,10 @@ def Train():
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
-                var_out = model(var_image)
+                var_out, kl_loss = model(var_image)
                 # backward and update parameters
                 optimizer_model.zero_grad()
-                loss_tensor = criterion.forward(var_out, var_label)
+                loss_tensor = criterion.forward(var_out, var_label) + kl_loss
                 loss_tensor.backward()
                 optimizer_model.step()
                 #show 
@@ -101,8 +101,8 @@ def Train():
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
-                var_out = model(var_image)
-                loss_tensor = criterion.forward(var_out, var_label)
+                var_out, kl_loss = model(var_image)
+                loss_tensor = criterion.forward(var_out, var_label) + kl_loss
                 loss_test.append(loss_tensor.item())
                 sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
                 sys.stdout.flush()
@@ -146,7 +146,7 @@ def Test():
     with torch.autograd.no_grad():
         for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_train):
             var_image = torch.autograd.Variable(ts_imgs).cuda()
-            var_out = model(var_image)
+            var_out, _ = model(var_image)
             tr_feat = torch.cat((tr_feat, var_out.data), 0)
             tr_label = torch.cat((tr_label, ts_label.cuda()), 0)
             tr_nodvol = torch.cat((tr_nodvol, ts_nodvol.cuda()), 0)
@@ -159,7 +159,7 @@ def Test():
     with torch.autograd.no_grad():
         for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_test):
             var_image = torch.autograd.Variable(ts_imgs).cuda()
-            var_out = model(var_image)
+            var_out, _ = model(var_image)
             te_feat = torch.cat((te_feat, var_out.data), 0)
             te_label = torch.cat((te_label, ts_label.cuda()), 0)
             te_nodvol = torch.cat((te_nodvol, ts_nodvol.cuda()), 0)

@@ -20,9 +20,9 @@ from torch.autograd import Variable
 from sklearn.metrics.pairwise import cosine_similarity
 from PIL import Image
 #define by myself
-from nets.bayes_conv import BayesConv2d
-from nets.spectral_normalization import SpectralNorm
-#from bayes_conv import BayesConv2d
+from nets.uca import BayesConv1d, BayesFC
+#from nets.spectral_normalization import SpectralNorm
+#from uca import BayesConv1d, BayesFC
 #from spectral_normalization import SpectralNorm
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
@@ -196,57 +196,70 @@ def constant_init(module):
     elif isinstance(module, nn.BatchNorm2d):
         pass
 
-#Channel-wise Bayesian Attention
-class ChannelBayesAttention(nn.Module):
-    """ Constructs a CBA module.
-        Args:k_size: Adaptive selection of kernel size
+#Uncertainty ChannelAttention Attention
+class UncertaintyChannelAttention(nn.Module):
+    """ Constructs a UCA module.
+        Args:k_size: kernel size
     """
-    def __init__(self, prior_mu=0, prior_sigma=0.5, k_size=3):
-        super(ChannelBayesAttention, self).__init__()
+    def __init__(self, prior_mu=0, prior_sigma=0.1, k_size=3):
+        super(UncertaintyChannelAttention, self).__init__()
         self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
-        self.bconv = BayesConv2d(prior_mu=prior_mu, prior_sigma=prior_sigma, in_channels=1, \
-            out_channels=1, kernel_size=k_size, stride=1, padding=(k_size - 1) // 2)
+        self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size)
+        self.bfc = BayesFC(512, 512).cuda()
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         #cross-channel
         y = self.avg_3dpool(x) 
-        y = y.squeeze(-1).squeeze(-1).transpose(-1, -2).unsqueeze(-1) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)->(B, 1, C, 1)
-        y = self.bconv(y) #linear projection
-        y = y.transpose(2, 1).unsqueeze(-1) #(B, 1, C, 1)-> (B, C, 1) -> (B, C, 1, 1, 1)
+        y = y.squeeze(-1).squeeze(-1).transpose(-1, -2) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)
+
+        y_conv = self.bconv(y) #local uncertain-dependencies
+        y_conv = y_conv.transpose(2, 1) #(B, 1, C)-> (B, C, 1)
+
+        y_fc = self.bfc(y.squeeze(1))#global uncertain-dependencies
+        y_fc = y_fc.unsqueeze(-1) #(B, C) -> (B, C, 1)
+
+        y = y_conv * y_fc 
+        y = y.unsqueeze(-1).unsqueeze(-1)
+        
         y = self.sigmoid(y)
         x = x * y.expand_as(x)# Multi-scale information fusion
-        return x
+
+        kl_loss = self.bconv.kl_loss() + self.bfc.kl_loss()
+
+        return x, kl_loss
 
 class MCBIR3DNet(nn.Module):
     def __init__(self, in_channels, code_size=512, model_depth=4):
         super(MCBIR3DNet, self).__init__()
         self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
-        self.cba = ChannelBayesAttention() 
-        self.ssa = SpatialSpectralAttention(in_ch=512, k=2) #3D cross-spatial attention
+        self.uca = UncertaintyChannelAttention() 
+        #self.ssa = SpatialSpectralAttention(in_ch=512, k=2) #3D cross-spatial attention
         self.gem = GeMLayer()
 
     def forward(self, x):
         x = self.conv3d(x)
 
         #channel-wise
-        x_c = self.cba(x) 
+        x_c, kl_loss = self.uca(x)
         x_c = self.gem(x_c).view(x_c.size(0), -1)
 
         #spatial-wise
-        x_s = self.ssa(x)
-        x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
-        x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
-        x_s = self.gem(x_s).view(x_s.size(0), -1)
+        #x_s = self.ssa(x)
+        #x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
+        #x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
+        #x_s = self.gem(x_s).view(x_s.size(0), -1)
 
         #concate
-        x = torch.cat((x_c, x_s),1)
+        #x = torch.cat((x_c, x_s),1)
+        x = x_c
       
-        return x
+        return x, kl_loss
 
 if __name__ == "__main__":
     #for debug  
     scan =  torch.rand(10, 1, 80, 80, 80).cuda()
     model = MCBIR3DNet(in_channels=1).cuda()
-    out = model(scan)
+    out, kl_loss = model(scan)
     print(out.shape)
+    print(kl_loss)

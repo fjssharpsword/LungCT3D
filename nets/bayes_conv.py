@@ -182,4 +182,5 @@ if __name__ == "__main__":
     k_size = 3 
     bconv = BayesConv2d(prior_mu=0, prior_sigma=0.5, in_channels=1, out_channels=1, kernel_size=k_size, stride=1, padding=(k_size - 1) // 2).cuda()
     out = bconv(x)
+    
     print(out.shape)
