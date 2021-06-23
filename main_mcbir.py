@@ -75,6 +75,7 @@ def Train():
         print('-' * 10)
         model.train()  #set model to training mode
         loss_train = []
+        kl_loss_train = []
         with torch.autograd.enable_grad():
             for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_train):
                 #forward
@@ -83,30 +84,38 @@ def Train():
                 var_out, kl_loss = model(var_image)
                 # backward and update parameters
                 optimizer_model.zero_grad()
-                loss_tensor = criterion.forward(var_out, var_label) + kl_loss
+                kl_loss = torch.mean(0.1*kl_loss)
+                loss_tensor = criterion.forward(var_out, var_label)  #+ kl_loss
                 loss_tensor.backward()
                 optimizer_model.step()
                 #show 
                 loss_train.append(loss_tensor.item())
                 sys.stdout.write('\r Epoch: {} / Step: {} : train loss = {}'.format(epoch+1, batch_idx+1, float('%0.6f'%loss_tensor.item()) ))
+                kl_loss_train.append(kl_loss.item())
+                sys.stdout.write('\r Epoch: {} / Step: {} : KL loss = {}'.format(epoch+1, batch_idx+1, float('%0.6f'%kl_loss.item()) ))
                 sys.stdout.flush()
         lr_scheduler_model.step()  #about lr and gamma
         print("\r Eopch: %5d train loss = %.6f" % (epoch + 1, np.mean(loss_train) ))
+        print("\r Eopch: %5d KL loss during training = %.6f" % (epoch + 1, np.mean(kl_loss_train) ))
 
         #test
         model.eval()
         loss_test = []
+        kl_loss_test = []
         with torch.autograd.no_grad():
             for batch_idx, (ts_imgs, ts_masks, ts_label, ts_nodvol) in enumerate(dataloader_test):
                 #forward
                 var_image = torch.autograd.Variable(ts_imgs).cuda()
                 var_label = torch.autograd.Variable(ts_label).cuda()
                 var_out, kl_loss = model(var_image)
-                loss_tensor = criterion.forward(var_out, var_label) + kl_loss
+                loss_tensor = criterion.forward(var_out, var_label)
                 loss_test.append(loss_tensor.item())
+                kl_loss = torch.mean(0.1*kl_loss)
+                kl_loss_test.append(kl_loss.item())
                 sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
                 sys.stdout.flush()
         print("\r Eopch: %5d test loss = %.6f" % (epoch + 1, np.mean(loss_test) ))
+        print("\r Eopch: %5d kl loss during test = %.6f" % (epoch + 1, np.mean(kl_loss_test) ))
 
         # save checkpoint
         if loss_min > np.mean(loss_test):
