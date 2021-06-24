@@ -19,7 +19,7 @@ class BayesConv1d(nn.Module):
         self.out_channels = out_channels
         self.kernel_size = (kernel_size,) #if isinstance(kernel_size, tuple) else (kernel_size, kernel_size) #for conv2
         self.stride = stride
-        self.padding = padding
+        self.padding = (kernel_size - 1) // 2 #padding
         self.dilation = dilation
         self.groups = 1
         self.use_bias = bias

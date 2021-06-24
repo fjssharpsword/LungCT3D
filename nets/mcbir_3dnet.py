@@ -21,7 +21,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from PIL import Image
 #define by myself
 from nets.uca import BayesConv1d, BayesFC
-#from nets.spectral_normalization import SpectralNorm
+from nets.spectral_normalization import SpectralNorm
 #from uca import BayesConv1d, BayesFC
 #from spectral_normalization import SpectralNorm
 
@@ -205,7 +205,7 @@ class UncertaintyChannelAttention(nn.Module):
         super(UncertaintyChannelAttention, self).__init__()
         self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
         self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size)
-        self.bfc = BayesFC(512, 512).cuda()
+        #self.bfc = BayesFC(512, 512).cuda()
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -216,18 +216,16 @@ class UncertaintyChannelAttention(nn.Module):
         y_conv = self.bconv(y) #local uncertain-dependencies
         y_conv = y_conv.transpose(2, 1) #(B, 1, C)-> (B, C, 1)
 
-        y_fc = self.bfc(y.squeeze(1))#global uncertain-dependencies
-        y_fc = y_fc.unsqueeze(-1) #(B, C) -> (B, C, 1)
+        #y_fc = self.bfc(y.squeeze(1))#global uncertain-dependencies
+        #y_fc = y_fc.unsqueeze(-1) #(B, C) -> (B, C, 1)
 
-        y = y_conv * y_fc 
+        y = y_conv #y_conv * y_fc
         y = y.unsqueeze(-1).unsqueeze(-1)
         
         y = self.sigmoid(y)
         x = x * y.expand_as(x)# Multi-scale information fusion
 
-        kl_loss = self.bconv.kl_loss() + self.bfc.kl_loss()
-
-        return x, kl_loss
+        return x
 
 class MCBIR3DNet(nn.Module):
     def __init__(self, in_channels, code_size=512, model_depth=4):
@@ -241,7 +239,7 @@ class MCBIR3DNet(nn.Module):
         x = self.conv3d(x)
 
         #channel-wise
-        x_c, kl_loss = self.uca(x)
+        x_c = self.uca(x)
         x_c = self.gem(x_c).view(x_c.size(0), -1)
 
         #spatial-wise
@@ -254,12 +252,11 @@ class MCBIR3DNet(nn.Module):
         #x = torch.cat((x_c, x_s),1)
         x = x_c
       
-        return x, kl_loss
+        return x
 
 if __name__ == "__main__":
     #for debug  
     scan =  torch.rand(10, 1, 80, 80, 80).cuda()
     model = MCBIR3DNet(in_channels=1).cuda()
-    out, kl_loss = model(scan)
+    out = model(scan)
     print(out.shape)
-    print(kl_loss)

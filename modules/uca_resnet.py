@@ -216,6 +216,6 @@ if __name__ == "__main__":
     #for debug  
 
     x =  torch.rand(2, 3, 256, 256).cuda()
-    model = eca_resnet152().cuda()
+    model = eca_resnet152(num_classes=10, k_size=[5, 5, 5, 5]).cuda()
     out = model(x)
     print(out.shape)
