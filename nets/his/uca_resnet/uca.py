@@ -19,7 +19,7 @@ class BayesConv1d(nn.Module):
         self.out_channels = out_channels
         self.kernel_size = (kernel_size,) #if isinstance(kernel_size, tuple) else (kernel_size, kernel_size) #for conv2
         self.stride = stride
-        self.padding = padding #(kernel_size - 1) // 2 
+        self.padding = (kernel_size - 1) // 2 #padding
         self.dilation = dilation
         self.groups = 1
         self.use_bias = bias
@@ -86,10 +86,8 @@ class BayesConv1d(nn.Module):
         return kl
 
 class BayesFC(nn.Module):
-    def __init__(self, in_features, out_features, bias=True, priors=None):
+    def __init__(self, bias=True, priors=None):
         super(BayesFC, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
         self.use_bias = bias
 
         if priors is None:
@@ -121,13 +119,14 @@ class BayesFC(nn.Module):
             self.bias_rho.data.fill_(self.prior_log_sigma)
 
     def forward(self, input, sample=True):
+        channels = input.shape[1]
         if self.training or sample:
-            W_eps = torch.empty((self.out_features, self.in_features)).normal_(0, 1).cuda()
+            W_eps = torch.empty((channels, channels)).normal_(0, 1).cuda()
             self.W_sigma = torch.log1p(torch.exp(self.W_rho))
             weight = self.W_mu + W_eps * self.W_sigma
 
             if self.use_bias:
-                bias_eps = torch.empty((self.out_features)).normal_(0, 1).cuda()
+                bias_eps = torch.empty((channels)).normal_(0, 1).cuda()
                 self.bias_sigma = torch.log1p(torch.exp(self.bias_rho))
                 bias = self.bias_mu + bias_eps * self.bias_sigma
             else:
@@ -149,18 +148,41 @@ class BayesFC(nn.Module):
             kl += self._calculate_kl(self.prior_mu, self.prior_sigma, self.bias_mu, self.bias_sigma)
         return kl
 
+#Uncertainty ChannelAttention Attention
+class UncertaintyChannelAttention(nn.Module):
+    """ Constructs a UCA module.
+        Args:k_size: kernel size
+    """
+    def __init__(self, prior_mu=0, prior_sigma=0.1, k_size=3):
+        super(UncertaintyChannelAttention, self).__init__()
+        self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
+        self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size)
+        self.bfc = BayesFC().cuda()
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        #cross-channel
+        y = self.avg_2dpool(x) 
+        y = y.squeeze(-1).transpose(-1, -2) #(B, C, 1, 1) -> (B, C, 1)->(B, 1, C)
+
+        y_conv = self.bconv(y) #local uncertain-dependencies
+        y_conv = y_conv.transpose(2, 1) #(B, 1, C)-> (B, C, 1)
+
+        y_fc = self.bfc(y.squeeze(1))#global uncertain-dependencies
+        y_fc = y_fc.unsqueeze(-1) #(B, C) -> (B, C, 1)
+
+        y = y_conv * y_fc
+        y = y.unsqueeze(-1)
+        
+        y = self.sigmoid(y)
+        x = x * y.expand_as(x)# Multi-scale information fusion
+
+        return x
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(10, 1, 512).cuda()
-    k_size = 3 
-    bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size).cuda()
-    out = bconv(x)
-    print(bconv.kl_loss())
-    print(out.shape)
 
-    x =  torch.rand(10, 512).cuda()
-    bfc = BayesFC(512, 512).cuda()
-    out = bfc(x)
-    print(bfc.kl_loss())
+    x =  torch.rand(10, 512, 10, 10).cuda()
+    uca = UncertaintyChannelAttention(k_size=3).cuda()
+    out = uca(x)
     print(out.shape)

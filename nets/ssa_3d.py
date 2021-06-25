@@ -15,6 +15,7 @@ from torch.nn import Parameter
 def l2normalize(v, eps=1e-12):
     return v / (v.norm() + eps)
 
+
 class SpectralNorm(nn.Module):
     def __init__(self, module, name='weight', power_iterations=1):
         super(SpectralNorm, self).__init__()
@@ -34,8 +35,6 @@ class SpectralNorm(nn.Module):
             u.data = l2normalize(torch.mv(w.view(height,-1).data, v.data))
 
         # sigma = torch.dot(u.data, torch.mv(w.view(height,-1).data, v.data))
-        del self.module._parameters[self.name]
-        
         sigma = u.dot(w.view(height, -1).mv(v))
         setattr(self.module, self.name, w / sigma.expand_as(w))
 
@@ -51,7 +50,7 @@ class SpectralNorm(nn.Module):
         v.data = l2normalize(v.data)
         w_bar = Parameter(w.data)
 
-        #del self.module._parameters[self.name]
+        del self.module._parameters[self.name]
 
         self.module.register_parameter(self.name + "_u", u)
         self.module.register_parameter(self.name + "_v", v)
@@ -65,44 +64,47 @@ class SpectralNorm(nn.Module):
 
 #Spatial-wise Spectral Attention
 class SpatialSpectralAttention(nn.Module): 
-    def __init__(self, in_ch, k, k_size=3):
+    def __init__(self, in_ch, k):
         super(SpatialSpectralAttention, self).__init__()
 
         self.in_ch = in_ch
         self.out_ch = in_ch
         self.mid_ch = in_ch // k
 
+        #print('Num channels:  in    out    mid')
+        #print('               {:>4d}  {:>4d}  {:>4d}'.format(self.in_ch, self.out_ch, self.mid_ch))
+
         self.f = nn.Sequential(
-            nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1)),
-            nn.BatchNorm2d(self.mid_ch),
+            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
+            nn.BatchNorm3d(self.mid_ch),
             nn.ReLU())
         self.g = nn.Sequential(
-            nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1)),
-            nn.BatchNorm2d(self.mid_ch),
+            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
+            nn.BatchNorm3d(self.mid_ch),
             nn.ReLU())
-        self.h = nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1))
-        self.v = nn.Conv2d(self.mid_ch, self.out_ch, (1, 1), (1, 1))
+        self.h = nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1))
+        self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
 
         #self.softmax = nn.Softmax(dim=-1)
-        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2 ))
+        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, 3, stride=1, padding=1))
 
         for conv in [self.f, self.g, self.h]: 
             conv.apply(weights_init)
         self.v.apply(constant_init)
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        B, C, D, H, W = x.shape
 
-        f_x = self.f(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
-        g_x = self.g(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
-        h_x = self.h(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
+        f_x = self.f(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
+        g_x = self.g(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
+        h_x = self.h(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
 
-        z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = H*W
+        z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
         #attn = self.softmax((self.mid_ch ** -.50) * z)
         attn = self.spe_norm(z.unsqueeze(1)).squeeze()
 
-        z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = H*W
-        z = z.permute(0, 2, 1).view(B, self.mid_ch, H, W)  # B * mid_ch * H * W
+        z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W
+        z = z.permute(0, 2, 1).view(B, self.mid_ch, D, H, W)  # B * mid_ch * D * H * W
 
         z = self.v(z)
         x = torch.add(z, x) # z + x
@@ -128,7 +130,7 @@ def constant_init(module):
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 512, 10, 10).cuda()
-    ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=5).cuda()
+    x =  torch.rand(2, 512, 10, 10, 10).cuda()
+    ssa = SpatialSpectralAttention(in_ch=512, k=2).cuda()
     out = ssa(x)
     print(out.shape)

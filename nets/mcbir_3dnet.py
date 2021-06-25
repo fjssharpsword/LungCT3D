@@ -20,10 +20,10 @@ from torch.autograd import Variable
 from sklearn.metrics.pairwise import cosine_similarity
 from PIL import Image
 #define by myself
-from nets.uca import BayesConv1d, BayesFC
-from nets.spectral_normalization import SpectralNorm
-#from uca import BayesConv1d, BayesFC
-#from spectral_normalization import SpectralNorm
+from nets.cba_3d import ChannelBayesianAttention
+from nets.ssa_3d import SpatialSpectralAttention
+#from cba_3d import ChannelBayesianAttention
+#from ssa_3d import SpatialSpectralAttention
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
 class CircleLoss(nn.Module):
@@ -130,108 +130,12 @@ class GeMLayer(nn.Module):
     def __repr__(self):
         return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
 
-#Spatial-wise Spectral Attention
-class SpatialSpectralAttention(nn.Module): 
-    def __init__(self, in_ch, k):
-        super(SpatialSpectralAttention, self).__init__()
-
-        self.in_ch = in_ch
-        self.out_ch = in_ch
-        self.mid_ch = in_ch // k
-
-        #print('Num channels:  in    out    mid')
-        #print('               {:>4d}  {:>4d}  {:>4d}'.format(self.in_ch, self.out_ch, self.mid_ch))
-
-        self.f = nn.Sequential(
-            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
-            nn.BatchNorm3d(self.mid_ch),
-            nn.ReLU())
-        self.g = nn.Sequential(
-            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
-            nn.BatchNorm3d(self.mid_ch),
-            nn.ReLU())
-        self.h = nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1))
-        self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
-
-        #self.softmax = nn.Softmax(dim=-1)
-        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, 3, stride=1, padding=1))
-
-        for conv in [self.f, self.g, self.h]: 
-            conv.apply(weights_init)
-        self.v.apply(constant_init)
-
-    def forward(self, x):
-        B, C, D, H, W = x.shape
-
-        f_x = self.f(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
-        g_x = self.g(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
-        h_x = self.h(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
-
-        z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
-        #attn = self.softmax((self.mid_ch ** -.50) * z)
-        attn = self.spe_norm(z.unsqueeze(1)).squeeze()
-
-        z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W
-        z = z.permute(0, 2, 1).view(B, self.mid_ch, D, H, W)  # B * mid_ch * D * H * W
-
-        z = self.v(z)
-        x = torch.add(z, x) # z + x
-        return x
-
-## Kaiming weight initialisation
-def weights_init(module):
-    if isinstance(module, nn.ReLU):
-        pass
-    if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
-        nn.init.kaiming_normal_(module.weight.data)
-        nn.init.constant_(module.bias.data, 0.0)
-    elif isinstance(module, nn.BatchNorm2d):
-        pass
-def constant_init(module):
-    if isinstance(module, nn.ReLU):
-        pass
-    if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
-        nn.init.constant_(module.weight.data, 0.0)
-        nn.init.constant_(module.bias.data, 0.0)
-    elif isinstance(module, nn.BatchNorm2d):
-        pass
-
-#Uncertainty ChannelAttention Attention
-class UncertaintyChannelAttention(nn.Module):
-    """ Constructs a UCA module.
-        Args:k_size: kernel size
-    """
-    def __init__(self, prior_mu=0, prior_sigma=0.1, k_size=3):
-        super(UncertaintyChannelAttention, self).__init__()
-        self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
-        self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size)
-        #self.bfc = BayesFC(512, 512).cuda()
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        #cross-channel
-        y = self.avg_3dpool(x) 
-        y = y.squeeze(-1).squeeze(-1).transpose(-1, -2) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)
-
-        y_conv = self.bconv(y) #local uncertain-dependencies
-        y_conv = y_conv.transpose(2, 1) #(B, 1, C)-> (B, C, 1)
-
-        #y_fc = self.bfc(y.squeeze(1))#global uncertain-dependencies
-        #y_fc = y_fc.unsqueeze(-1) #(B, C) -> (B, C, 1)
-
-        y = y_conv #y_conv * y_fc
-        y = y.unsqueeze(-1).unsqueeze(-1)
-        
-        y = self.sigmoid(y)
-        x = x * y.expand_as(x)# Multi-scale information fusion
-
-        return x
 
 class MCBIR3DNet(nn.Module):
-    def __init__(self, in_channels, code_size=512, model_depth=4):
+    def __init__(self, in_channels, model_depth=4):
         super(MCBIR3DNet, self).__init__()
         self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
-        self.uca = UncertaintyChannelAttention() 
+        self.cba = ChannelBayesianAttention(k_size=5) 
         #self.ssa = SpatialSpectralAttention(in_ch=512, k=2) #3D cross-spatial attention
         self.gem = GeMLayer()
 
@@ -239,7 +143,7 @@ class MCBIR3DNet(nn.Module):
         x = self.conv3d(x)
 
         #channel-wise
-        x_c = self.uca(x)
+        x_c = self.cba(x)
         x_c = self.gem(x_c).view(x_c.size(0), -1)
 
         #spatial-wise

@@ -1,40 +1,34 @@
 # encoding: utf-8
 """
-2D Retrieval Model for ImageNet
+Uncertainty Channel Attention for resnet
 Author: Jason.Fang
-Update time: 26/06/2021
+Update time: 22/06/2021
 """
 import sys
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from uca import UncertaintyChannelAttention
 
-#define by myself
-#from nets.cba_2d import ChannelBayesianAttention
-#from nets.ssa import SpatialSpectralAttention
-from cba_2d import ChannelBayesianAttention
-from ssa_2d import SpatialSpectralAttention
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
-class BasicBlock(nn.Module):
+
+class ECABasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
-        super(BasicBlock, self).__init__()
+        super(ECABasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes, 1)
         self.bn2 = nn.BatchNorm2d(planes)
-
-        self.cba = ChannelBayesianAttention(k_size=k_size) #channel attention
-        self.ssa = SpatialSpectralAttention(in_ch=planes, k=2, k_size=k_size) #spatial attention
-
+        self.uca = UncertaintyChannelAttention(k_size=k_size)
         self.downsample = downsample
         self.stride = stride
 
@@ -46,9 +40,7 @@ class BasicBlock(nn.Module):
 
         out = self.conv2(out)
         out = self.bn2(out)
-
-        out = self.cba(out)#channel attention
-        out = self.ssa(out)#spatial attention
+        out = self.uca(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -59,11 +51,11 @@ class BasicBlock(nn.Module):
         return out
 
 
-class Bottleneck(nn.Module):
+class ECABottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
-        super(Bottleneck, self).__init__()
+        super(ECABottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
@@ -72,10 +64,7 @@ class Bottleneck(nn.Module):
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
-
-        self.cba = ChannelBayesianAttention(k_size=k_size) #channel attention
-        self.ssa = SpatialSpectralAttention(in_ch=planes * 4, k=2, k_size=k_size) #spatial attention
-
+        self.uca = UncertaintyChannelAttention(k_size=k_size)
         self.downsample = downsample
         self.stride = stride
 
@@ -92,9 +81,7 @@ class Bottleneck(nn.Module):
 
         out = self.conv3(out)
         out = self.bn3(out)
-
-        out = self.cba(out)#channel attention
-        out = self.ssa(out)#spatial attention
+        out = self.uca(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -110,7 +97,8 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, k_size=[3, 3, 3, 3]):
         self.inplanes = 64
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -164,68 +152,70 @@ class ResNet(nn.Module):
         return x
 
 
-def cba_ssa_resnet18(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def eca_resnet18(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-18 model.
     Args:
         k_size: Adaptive selection of kernel size
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         num_classes:The classes of classification
     """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, k_size=k_size)
+    model = ResNet(ECABasicBlock, [2, 2, 2, 2], num_classes=num_classes, k_size=k_size)
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     return model
 
 
-def cba_ssa_resnet34(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def eca_resnet34(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-34 model.
     Args:
         k_size: Adaptive selection of kernel size
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         num_classes:The classes of classification
     """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size)
+    model = ResNet(ECABasicBlock, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size)
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     return model
 
 
-def cba_ssa_resnet50(k_size=[3, 3, 3, 3], num_classes=1000, pretrained=False):
+def eca_resnet50(k_size=[3, 3, 3, 3], num_classes=1000, pretrained=False):
     """Constructs a ResNet-50 model.
     Args:
         k_size: Adaptive selection of kernel size
         num_classes:The classes of classification
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size)
+    print("Constructing eca_resnet50......")
+    model = ResNet(ECABottleneck, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size)
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     return model
 
 
-def cba_ssa_resnet101(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def eca_resnet101(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-101 model.
     Args:
         k_size: Adaptive selection of kernel size
         num_classes:The classes of classification
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, k_size=k_size)
+    model = ResNet(ECABottleneck, [3, 4, 23, 3], num_classes=num_classes, k_size=k_size)
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     return model
 
 
-def cba_ssa_resnet152(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def eca_resnet152(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-152 model.
     Args:
         k_size: Adaptive selection of kernel size
         num_classes:The classes of classification
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, k_size=k_size)
+    model = ResNet(ECABottleneck, [3, 8, 36, 3], num_classes=num_classes, k_size=k_size)
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     return model
 
 if __name__ == "__main__":
     #for debug  
+
     x =  torch.rand(2, 3, 256, 256).cuda()
-    model = cba_ssa_resnet152(num_classes=64, k_size=[3, 3, 3, 3]).cuda()
+    model = eca_resnet152(num_classes=10, k_size=[5, 5, 5, 5]).cuda()
     out = model(x)
     print(out.shape)
