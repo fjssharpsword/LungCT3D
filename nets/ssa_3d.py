@@ -1,6 +1,6 @@
 # encoding: utf-8
 """
-Uncertainty Channel Attention
+3D Uncertainty Spatial Attention with Spectral Convolution
 Author: Jason.Fang
 Update time: 25/06/2021
 """
@@ -64,7 +64,7 @@ class SpectralNorm(nn.Module):
 
 #Spatial-wise Spectral Attention
 class SpatialSpectralAttention(nn.Module): 
-    def __init__(self, in_ch, k):
+    def __init__(self, in_ch, k, k_size=3):
         super(SpatialSpectralAttention, self).__init__()
 
         self.in_ch = in_ch
@@ -86,7 +86,7 @@ class SpatialSpectralAttention(nn.Module):
         self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
 
         #self.softmax = nn.Softmax(dim=-1)
-        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, 3, stride=1, padding=1))
+        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2 ))
 
         for conv in [self.f, self.g, self.h]: 
             conv.apply(weights_init)
@@ -131,6 +131,6 @@ def constant_init(module):
 if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 512, 10, 10, 10).cuda()
-    ssa = SpatialSpectralAttention(in_ch=512, k=2).cuda()
+    ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=5).cuda()
     out = ssa(x)
     print(out.shape)

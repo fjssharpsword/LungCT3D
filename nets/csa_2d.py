@@ -1,6 +1,6 @@
 # encoding: utf-8
 """
-Uncertainty Channel Attention
+2D Uncertainty Channel Attention with Spectral Convolution
 Author: Jason.Fang
 Update time: 25/06/2021
 """
@@ -84,15 +84,15 @@ class BayesConv1d(nn.Module):
             kl += self._calculate_kl(self.prior_mu, self.prior_sigma, self.bias_mu, self.bias_sigma)
         return kl
 
-#ChannelBayesianAttention
-class ChannelBayesianAttention(nn.Module):
-    """ Constructs a CBA module.
+#Channel spectral attention
+class ChannelSpectralAttention(nn.Module):
+    """ Constructs a CSA module.
         Args:k_size: kernel size
     """
-    def __init__(self, k_size=3):
-        super(ChannelBayesianAttention, self).__init__()
+    def __init__(self, k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1}):
+        super(ChannelSpectralAttention, self).__init__()
         self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
-        self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size)
+        self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size, priors=priors)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -111,7 +111,7 @@ class ChannelBayesianAttention(nn.Module):
 if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 512, 10, 10).cuda()
-    cba = ChannelBayesianAttention(k_size=5).cuda()
+    cba = ChannelSpectralAttention(k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1}).cuda()
     out = cba(x)
     print(cba.bconv.kl_loss())
     print(out.shape)

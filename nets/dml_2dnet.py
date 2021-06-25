@@ -11,9 +11,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 #define by myself
-#from nets.cba_2d import ChannelBayesianAttention
-#from nets.ssa import SpatialSpectralAttention
-from cba_2d import ChannelBayesianAttention
+#from nets.csa_2d import ChannelSpectralAttention
+#from nets.ssa_2d import SpatialSpectralAttention
+from csa_2d import ChannelSpectralAttention
 from ssa_2d import SpatialSpectralAttention
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -32,7 +32,7 @@ class BasicBlock(nn.Module):
         self.conv2 = conv3x3(planes, planes, 1)
         self.bn2 = nn.BatchNorm2d(planes)
 
-        self.cba = ChannelBayesianAttention(k_size=k_size) #channel attention
+        self.csa = ChannelSpectralAttention(k_size=k_size) #channel attention
         self.ssa = SpatialSpectralAttention(in_ch=planes, k=2, k_size=k_size) #spatial attention
 
         self.downsample = downsample
@@ -47,7 +47,7 @@ class BasicBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
 
-        out = self.cba(out)#channel attention
+        out = self.csa(out)#channel attention
         out = self.ssa(out)#spatial attention
 
         if self.downsample is not None:
@@ -73,7 +73,7 @@ class Bottleneck(nn.Module):
         self.bn3 = nn.BatchNorm2d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
 
-        self.cba = ChannelBayesianAttention(k_size=k_size) #channel attention
+        self.csa = ChannelSpectralAttention(k_size=k_size) #channel attention
         self.ssa = SpatialSpectralAttention(in_ch=planes * 4, k=2, k_size=k_size) #spatial attention
 
         self.downsample = downsample
@@ -93,7 +93,7 @@ class Bottleneck(nn.Module):
         out = self.conv3(out)
         out = self.bn3(out)
 
-        out = self.cba(out)#channel attention
+        out = self.csa(out)#channel attention
         out = self.ssa(out)#spatial attention
 
         if self.downsample is not None:
