@@ -85,7 +85,7 @@ class SpatialSpectralAttention(nn.Module):
         self.h = nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1))
         self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
 
-        #self.softmax = nn.Softmax(dim=-1)
+        self.softmax = nn.Softmax(dim=-1)
         self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2 ))
 
         for conv in [self.f, self.g, self.h]: 
@@ -100,8 +100,8 @@ class SpatialSpectralAttention(nn.Module):
         h_x = self.h(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
 
         z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
-        #attn = self.softmax((self.mid_ch ** -.50) * z)
         attn = self.spe_norm(z.unsqueeze(1)).squeeze()
+        attn = self.softmax((self.mid_ch ** -.50) * attn)
 
         z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W
         z = z.permute(0, 2, 1).view(B, self.mid_ch, D, H, W)  # B * mid_ch * D * H * W
