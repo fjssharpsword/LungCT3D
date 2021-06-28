@@ -101,7 +101,7 @@ class SpatialSpectralAttention(nn.Module):
 
         z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
         attn = self.spe_norm(z.unsqueeze(1)).squeeze()
-        attn = self.softmax((self.mid_ch ** -.50) * attn)
+        #attn = self.softmax((self.mid_ch ** -.50) * attn)
 
         z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W
         z = z.permute(0, 2, 1).view(B, self.mid_ch, D, H, W)  # B * mid_ch * D * H * W

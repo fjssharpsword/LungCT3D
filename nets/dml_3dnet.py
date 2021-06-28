@@ -137,7 +137,7 @@ class DML3DNet(nn.Module):
         super(DML3DNet, self).__init__()
         self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
 
-        #self.csa = ChannelSpectralAttention(k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1})
+        self.csa = ChannelSpectralAttention(k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1})
         self.ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=3) 
 
         self.gem = GeMLayer()
@@ -146,18 +146,18 @@ class DML3DNet(nn.Module):
         x = self.conv3d(x)
 
         #channel-wise
-        #x_c = self.csa(x)
-        #x_c = self.gem(x_c).view(x_c.size(0), -1)
+        x_c = self.csa(x)
+        x_c = self.gem(x_c).view(x_c.size(0), -1)
 
         #spatial-wise
-        x_s = self.ssa(x)
-        x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
-        x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
-        x_s = self.gem(x_s).view(x_s.size(0), -1)
+        #x_s = self.ssa(x)
+        #x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
+        #x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
+        #x_s = self.gem(x_s).view(x_s.size(0), -1)
 
         #concate
         #x = torch.cat((x_c, x_s),1)
-        x = x_s
+        x = x_c
       
         return x
 
