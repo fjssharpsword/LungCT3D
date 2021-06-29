@@ -150,14 +150,13 @@ class DML3DNet(nn.Module):
         x_c = self.gem(x_c).view(x_c.size(0), -1)
 
         #spatial-wise
-        #x_s = self.ssa(x)
-        #x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
-        #x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
-        #x_s = self.gem(x_s).view(x_s.size(0), -1)
+        x_s = self.ssa(x)
+        x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
+        x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
+        x_s = self.gem(x_s).view(x_s.size(0), -1)
 
         #concate
-        #x = torch.cat((x_c, x_s),1)
-        x = x_c
+        x = torch.cat((x_c, x_s),1)
       
         return x
 
