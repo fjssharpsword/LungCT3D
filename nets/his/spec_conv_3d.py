@@ -1,8 +1,8 @@
 # encoding: utf-8
 """
-2D Uncertainty Spatial Attention with Spectral Convolution
+Spectral Convolution
 Author: Jason.Fang
-Update time: 25/06/2021
+Update time: 30/06/2021
 """
 
 import torch
@@ -62,7 +62,6 @@ class SpectralNorm(nn.Module):
         self._update_u_v()
         return self.module.forward(*args)
 
-
 #Spatial-wise Spectral Attention
 class SpatialSpectralAttention(nn.Module): 
     def __init__(self, in_ch, k, k_size=3):
@@ -72,37 +71,40 @@ class SpatialSpectralAttention(nn.Module):
         self.out_ch = in_ch
         self.mid_ch = in_ch // k
 
+        #print('Num channels:  in    out    mid')
+        #print('               {:>4d}  {:>4d}  {:>4d}'.format(self.in_ch, self.out_ch, self.mid_ch))
+
         self.f = nn.Sequential(
-            nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1)),
-            nn.BatchNorm2d(self.mid_ch),
+            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
+            nn.BatchNorm3d(self.mid_ch),
             nn.ReLU())
         self.g = nn.Sequential(
-            nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1)),
-            nn.BatchNorm2d(self.mid_ch),
+            nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1)),
+            nn.BatchNorm3d(self.mid_ch),
             nn.ReLU())
-        self.h = nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1))
-        self.v = nn.Conv2d(self.mid_ch, self.out_ch, (1, 1), (1, 1))
+        self.h = nn.Conv3d(self.in_ch, self.mid_ch, (1, 1, 1), (1, 1, 1))
+        self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
 
-        #self.softmax = nn.Softmax(dim=-1)
-        self.spe_conv = SpectralNorm(nn.Conv2d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2 ))
+        self.softmax = nn.Softmax(dim=-1)
+        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2 ))
 
         for conv in [self.f, self.g, self.h]: 
             conv.apply(weights_init)
         self.v.apply(constant_init)
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        B, C, D, H, W = x.shape
 
-        f_x = self.f(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
-        g_x = self.g(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
-        h_x = self.h(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
+        f_x = self.f(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
+        g_x = self.g(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
+        h_x = self.h(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
 
-        z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = H*W
-        #attn = self.softmax((self.mid_ch ** -.50) * z)
-        attn = self.spe_conv(z.unsqueeze(1)).squeeze()
+        z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
+        attn = self.spe_norm(z.unsqueeze(1)).squeeze()
+        #attn = self.softmax((self.mid_ch ** -.50) * attn)
 
-        z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = H*W
-        z = z.permute(0, 2, 1).view(B, self.mid_ch, H, W)  # B * mid_ch * H * W
+        z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W
+        z = z.permute(0, 2, 1).view(B, self.mid_ch, D, H, W)  # B * mid_ch * D * H * W
 
         z = self.v(z)
         x = torch.add(z, x) # z + x
@@ -126,9 +128,38 @@ def constant_init(module):
     elif isinstance(module, nn.BatchNorm2d):
         pass
 
+#Channel-wise Spectral Attention
+class ChannelSpectralAttention(nn.Module):
+    """Constructs a CSA module.
+    Args:
+        channel: Number of channels of the input feature map
+        k_size: Adaptive selection of kernel size
+    """
+    def __init__(self, k_size=3):
+        super(ChannelSpectralAttention, self).__init__()
+        self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
+        self.spe_conv = SpectralNorm(nn.Conv1d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2) )
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        y = self.avg_3dpool(x) 
+        y = y.squeeze(-1).squeeze(-1).transpose(-1, -2) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)
+
+        y = self.spe_conv(y) #local uncertain-dependencies
+        y = y.transpose(2, 1).unsqueeze(-1).unsqueeze(-1) #(B, 1, C)-> (B, C, 1)-> (B, C, 1, 1)-> (B, C, 1, 1, 1)
+
+        y = self.sigmoid(y)
+        x = x * y.expand_as(x)# Multi-scale information fusion
+        return x
+
+
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 512, 10, 10).cuda()
+    x =  torch.rand(2, 512, 10, 10, 10).cuda()
     ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=5).cuda()
     out = ssa(x)
+    print(out.shape)
+    
+    csa = ChannelSpectralAttention(k_size=5).cuda()
+    out = csa(x)
     print(out.shape)

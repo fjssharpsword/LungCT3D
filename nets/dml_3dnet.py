@@ -137,7 +137,7 @@ class DML3DNet(nn.Module):
         super(DML3DNet, self).__init__()
         self.conv3d = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
 
-        self.csa = ChannelSpectralAttention(k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1})
+        self.csa = ChannelSpectralAttention(k_size=3)
         self.ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=3) 
 
         self.gem = GeMLayer()
@@ -157,7 +157,7 @@ class DML3DNet(nn.Module):
 
         #concate
         x = torch.cat((x_c, x_s),1)
-      
+        
         return x
 
 if __name__ == "__main__":

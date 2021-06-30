@@ -84,6 +84,56 @@ class BayesConv1d(nn.Module):
             kl += self._calculate_kl(self.prior_mu, self.prior_sigma, self.bias_mu, self.bias_sigma)
         return kl
 
+def l2normalize(v, eps=1e-12):
+    return v / (v.norm() + eps)
+
+class SpectralNorm(nn.Module):
+    def __init__(self, module, name='weight', power_iterations=1):
+        super(SpectralNorm, self).__init__()
+        self.module = module
+        self.name = name
+        self.power_iterations = power_iterations
+        self._make_params()
+
+    def _update_u_v(self):
+        u = getattr(self.module, self.name + "_u")
+        v = getattr(self.module, self.name + "_v")
+        w = getattr(self.module, self.name + "_bar")
+
+        height = w.data.shape[0]
+        for _ in range(self.power_iterations):
+            v.data = l2normalize(torch.mv(torch.t(w.view(height,-1).data), u.data))
+            u.data = l2normalize(torch.mv(w.view(height,-1).data, v.data))
+
+        # sigma = torch.dot(u.data, torch.mv(w.view(height,-1).data, v.data))
+        del self.module._parameters[self.name]
+        
+        sigma = u.dot(w.view(height, -1).mv(v))
+        setattr(self.module, self.name, w / sigma.expand_as(w))
+
+    def _make_params(self):
+        w = getattr(self.module, self.name)
+
+        height = w.data.shape[0]
+        width = w.view(height, -1).data.shape[1]
+
+        u = nn.Parameter(w.data.new(height).normal_(0, 1), requires_grad=False)
+        v = nn.Parameter(w.data.new(width).normal_(0, 1), requires_grad=False)
+        u.data = l2normalize(u.data)
+        v.data = l2normalize(v.data)
+        w_bar = nn.Parameter(w.data)
+
+        #del self.module._parameters[self.name]
+
+        self.module.register_parameter(self.name + "_u", u)
+        self.module.register_parameter(self.name + "_v", v)
+        self.module.register_parameter(self.name + "_bar", w_bar)
+
+
+    def forward(self, *args):
+        self._update_u_v()
+        return self.module.forward(*args)
+
 #Channel spectral attention
 class ChannelSpectralAttention(nn.Module):
     """ Constructs a CSA module.
@@ -92,7 +142,8 @@ class ChannelSpectralAttention(nn.Module):
     def __init__(self, k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1}):
         super(ChannelSpectralAttention, self).__init__()
         self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
-        self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size, priors=priors)
+        #self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size, priors=priors)
+        self.spec_conv = SpectralNorm(nn.Conv1d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2) )
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -100,7 +151,7 @@ class ChannelSpectralAttention(nn.Module):
         y = self.avg_2dpool(x) 
         y = y.squeeze(-1).transpose(-1, -2) #(B, C, 1, 1) -> (B, C, 1)->(B, 1, C)
 
-        y = self.bconv(y) #local uncertain-dependencies
+        y = self.spec_conv(y) #local uncertain-dependencies
         y = y.transpose(2, 1).unsqueeze(-1) #(B, 1, C)-> (B, C, 1)-> (B, C, 1, 1)
 
         y = self.sigmoid(y)
@@ -111,7 +162,6 @@ class ChannelSpectralAttention(nn.Module):
 if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 512, 10, 10).cuda()
-    cba = ChannelSpectralAttention(k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1}).cuda()
-    out = cba(x)
-    print(cba.bconv.kl_loss())
+    csa = ChannelSpectralAttention(k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1}).cuda()
+    out = csa(x)
     print(out.shape)

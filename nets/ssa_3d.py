@@ -15,7 +15,6 @@ from torch.nn import Parameter
 def l2normalize(v, eps=1e-12):
     return v / (v.norm() + eps)
 
-
 class SpectralNorm(nn.Module):
     def __init__(self, module, name='weight', power_iterations=1):
         super(SpectralNorm, self).__init__()
@@ -86,7 +85,7 @@ class SpatialSpectralAttention(nn.Module):
         self.v = nn.Conv3d(self.mid_ch, self.out_ch, (1, 1, 1), (1, 1, 1))
 
         self.softmax = nn.Softmax(dim=-1)
-        self.spe_norm = SpectralNorm(nn.Conv2d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2 ))
+        self.spec_conv = SpectralNorm(nn.Conv2d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2 ))
 
         for conv in [self.f, self.g, self.h]: 
             conv.apply(weights_init)
@@ -100,7 +99,7 @@ class SpatialSpectralAttention(nn.Module):
         h_x = self.h(x).view(B, self.mid_ch, D * H * W)  # B * mid_ch * N, where N = D*H*W
 
         z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = D*H*W
-        attn = self.spe_norm(z.unsqueeze(1)).squeeze()
+        attn = self.spec_conv(z.unsqueeze(1)).squeeze()
         #attn = self.softmax((self.mid_ch ** -.50) * attn)
 
         z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = D*H*W

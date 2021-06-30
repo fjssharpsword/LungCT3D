@@ -1,8 +1,8 @@
 # encoding: utf-8
 """
-2D Uncertainty Spatial Attention with Spectral Convolution
+Spectral Convolution
 Author: Jason.Fang
-Update time: 25/06/2021
+Update time: 30/06/2021
 """
 
 import torch
@@ -98,8 +98,8 @@ class SpatialSpectralAttention(nn.Module):
         h_x = self.h(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
 
         z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = H*W
-        #attn = self.softmax((self.mid_ch ** -.50) * z)
         attn = self.spe_conv(z.unsqueeze(1)).squeeze()
+        #attn = self.softmax((self.mid_ch ** -.50) * attn)
 
         z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = H*W
         z = z.permute(0, 2, 1).view(B, self.mid_ch, H, W)  # B * mid_ch * H * W
@@ -126,9 +126,37 @@ def constant_init(module):
     elif isinstance(module, nn.BatchNorm2d):
         pass
 
+#Channel-wise Spectral Attention
+class ChannelSpectralAttention(nn.Module):
+    """Constructs a CSA module.
+    Args:
+        channel: Number of channels of the input feature map
+        k_size: Adaptive selection of kernel size
+    """
+    def __init__(self, k_size=3):
+        super(ChannelSpectralAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.spe_conv = SpectralNorm(nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) )
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        # feature descriptor on the global spatial information
+        y = self.avg_pool(x)
+        # Two different branches of CSA module
+        y = self.spe_conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
+        # Multi-scale information fusion
+        y = self.sigmoid(y)
+        x = x * y.expand_as(x)
+        return x
+
+
 if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 512, 10, 10).cuda()
     ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=5).cuda()
     out = ssa(x)
+    print(out.shape)
+    
+    csa = ChannelSpectralAttention(k_size=5).cuda()
+    out = csa(x)
     print(out.shape)
