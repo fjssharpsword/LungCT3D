@@ -140,8 +140,8 @@ class ChannelSpectralAttention(nn.Module):
     def __init__(self, k_size=3, priors={'prior_mu': 0, 'prior_sigma': 0.1}):
         super(ChannelSpectralAttention, self).__init__()
         self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
-        #self.bconv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size, priors=priors)
-        self.spec_conv = SpectralNorm(nn.Conv1d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2) )
+        self.bayes_conv = BayesConv1d(in_channels=1, out_channels=1, kernel_size=k_size, priors=priors)
+        #self.spec_conv = SpectralNorm(nn.Conv1d(1, 1, k_size, stride=1, padding=(k_size - 1) // 2) )
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -149,7 +149,7 @@ class ChannelSpectralAttention(nn.Module):
         y = self.avg_3dpool(x) 
         y = y.squeeze(-1).squeeze(-1).transpose(-1, -2) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)
 
-        y = self.spec_conv(y) #local uncertain-dependencies
+        y = self.bayes_conv(y) #local uncertain-dependencies
         y = y.transpose(2, 1).unsqueeze(-1).unsqueeze(-1) #(B, 1, C)-> (B, C, 1)-> (B, C, 1, 1)-> (B, C, 1, 1, 1)
 
         y = self.sigmoid(y)

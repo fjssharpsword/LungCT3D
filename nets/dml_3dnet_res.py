@@ -11,14 +11,54 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 #define by myself
-#from nets.csa_2d import ChannelSpectralAttention
-#from nets.ssa_2d import SpatialSpectralAttention
-from csa_2d import ChannelSpectralAttention
-from ssa_2d import SpatialSpectralAttention
+from nets.csa_3d import ChannelSpectralAttention
+from nets.ssa_3d import SpatialSpectralAttention
+#from csa_3d import ChannelSpectralAttention
+#from ssa_3d import SpatialSpectralAttention
 
-def conv3x3(in_planes, out_planes, stride=1):
+
+#https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
+class CircleLoss(nn.Module):
+    def __init__(self, scale=32, margin=0.25, similarity='cos', **kwargs):
+        super(CircleLoss, self).__init__()
+        self.scale = scale
+        self.margin = margin
+        self.similarity = similarity
+
+    def forward(self, feats, labels):
+        assert feats.size(0) == labels.size(0), \
+            f"feats.size(0): {feats.size(0)} is not equal to labels.size(0): {labels.size(0)}"
+        
+        labels = (labels.cpu().data + 1)
+        labels = labels.unsqueeze(1)
+        mask = torch.matmul(labels, torch.t(labels))
+        mask = mask.eq(1).int() + mask.eq(4).int() + mask.eq(9).int() + mask.eq(16).int() + mask.eq(25).int()#1x1,2x2,3x3,4x4,5x5
+
+        pos_mask = mask.triu(diagonal=1)
+        neg_mask = (mask - 1).abs_().triu(diagonal=1)
+        if self.similarity == 'dot':
+            sim_mat = torch.matmul(feats, torch.t(feats))
+        elif self.similarity == 'cos':
+            feats = F.normalize(feats)
+            sim_mat = feats.mm(feats.t())
+        else:
+            raise ValueError('This similarity is not implemented.')
+
+        pos_pair_ = sim_mat[pos_mask == 1]
+        neg_pair_ = sim_mat[neg_mask == 1]
+
+        alpha_p = torch.relu(-pos_pair_ + 1 + self.margin)
+        alpha_n = torch.relu(neg_pair_ + self.margin)
+        margin_p = 1 - self.margin
+        margin_n = self.margin
+        loss_p = torch.sum(torch.exp(-self.scale * alpha_p * (pos_pair_ - margin_p)))
+        loss_n = torch.sum(torch.exp(self.scale * alpha_n * (neg_pair_ - margin_n)))
+        loss = torch.log(1 + loss_p * loss_n)
+        return loss
+
+def conv3x3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+    return nn.Conv3d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
 class BasicBlock(nn.Module):
@@ -26,14 +66,15 @@ class BasicBlock(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
         super(BasicBlock, self).__init__()
-        self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv1 = conv3x3x3(inplanes, planes, stride)
+        self.bn1 = nn.BatchNorm3d(planes)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(planes, planes, 1)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv2 = conv3x3x3(planes, planes, 1)
+        self.bn2 = nn.BatchNorm3d(planes)
 
         self.csa = ChannelSpectralAttention(k_size=k_size) #channel attention
         self.ssa = SpatialSpectralAttention(in_ch=planes, k=2, k_size=k_size) #spatial attention
+        #self.ssa = SpatialSpectralAttention(k_size=k_size)
 
         self.downsample = downsample
         self.stride = stride
@@ -64,17 +105,18 @@ class Bottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
+        self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm3d(planes)
+        self.conv2 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
                                padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
+        self.bn2 = nn.BatchNorm3d(planes)
+        self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm3d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
 
         self.csa = ChannelSpectralAttention(k_size=k_size) #channel attention
         self.ssa = SpatialSpectralAttention(in_ch=planes * 4, k=2, k_size=k_size) #spatial attention
+        #self.ssa = SpatialSpectralAttention(k_size=k_size)
 
         self.downsample = downsample
         self.stride = stride
@@ -110,17 +152,18 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, k_size=[3, 3, 3, 3]):
         self.inplanes = 64
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        self.conv1 = nn.Conv3d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.maxpool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0]))
         self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
+        self.avgpool = nn.AvgPool3d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
+        """
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -128,14 +171,15 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+        """
 
     def _make_layer(self, block, planes, blocks, k_size, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
+                nn.Conv3d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                nn.BatchNorm3d(planes * block.expansion),
             )
 
         layers = []
@@ -159,12 +203,12 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        #x = self.fc(x)
 
         return x
 
 
-def cba_ssa_resnet18(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def spec_resnet18(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-18 model.
     Args:
         k_size: Adaptive selection of kernel size
@@ -172,11 +216,11 @@ def cba_ssa_resnet18(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
         num_classes:The classes of classification
     """
     model = ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, k_size=k_size)
-    model.avgpool = nn.AdaptiveAvgPool2d(1)
+    model.avgpool = nn.AdaptiveAvgPool3d(1)
     return model
 
 
-def cba_ssa_resnet34(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def spec_resnet34(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-34 model.
     Args:
         k_size: Adaptive selection of kernel size
@@ -184,11 +228,11 @@ def cba_ssa_resnet34(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
         num_classes:The classes of classification
     """
     model = ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size)
-    model.avgpool = nn.AdaptiveAvgPool2d(1)
+    model.avgpool = nn.AdaptiveAvgPool3d(1)
     return model
 
 
-def cba_ssa_resnet50(k_size=[3, 3, 3, 3], num_classes=1000, pretrained=False):
+def spec_resnet50(k_size=[3, 3, 3, 3], num_classes=1000, pretrained=False):
     """Constructs a ResNet-50 model.
     Args:
         k_size: Adaptive selection of kernel size
@@ -196,11 +240,11 @@ def cba_ssa_resnet50(k_size=[3, 3, 3, 3], num_classes=1000, pretrained=False):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size)
-    model.avgpool = nn.AdaptiveAvgPool2d(1)
+    model.avgpool = nn.AdaptiveAvgPool3d(1)
     return model
 
 
-def cba_ssa_resnet101(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def spec_resnet101(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-101 model.
     Args:
         k_size: Adaptive selection of kernel size
@@ -208,11 +252,11 @@ def cba_ssa_resnet101(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes, k_size=k_size)
-    model.avgpool = nn.AdaptiveAvgPool2d(1)
+    model.avgpool = nn.AdaptiveAvgPool3d(1)
     return model
 
 
-def cba_ssa_resnet152(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
+def spec_resnet152(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     """Constructs a ResNet-152 model.
     Args:
         k_size: Adaptive selection of kernel size
@@ -220,12 +264,12 @@ def cba_ssa_resnet152(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, k_size=k_size)
-    model.avgpool = nn.AdaptiveAvgPool2d(1)
+    model.avgpool = nn.AdaptiveAvgPool3d(1)
     return model
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 3, 256, 256).cuda()
-    model = cba_ssa_resnet152(num_classes=64, k_size=[3, 3, 3, 3]).cuda()
-    out = model(x)
+    x =  torch.rand(2, 1, 80, 80, 80).cuda()
+    model = spec_resnet152(num_classes=5).cuda()
+    out  = model(x)
     print(out.shape)

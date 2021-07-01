@@ -61,7 +61,7 @@ class SpectralNorm(nn.Module):
         return self.module.forward(*args)
 
 
-#Spatial-wise Spectral Attention
+#Spatial-wise Spectral Attention (self-attention)
 class SpatialSpectralAttention(nn.Module): 
     def __init__(self, in_ch, k, k_size=3):
         super(SpatialSpectralAttention, self).__init__()
@@ -127,9 +127,31 @@ def constant_init(module):
     elif isinstance(module, nn.BatchNorm2d):
         pass
 
+#spatial attention layer (CBAM)
+class SpatialSpectralAttention_v(nn.Module):
+    def __init__(self, k_size=3):
+        super(SpatialSpectralAttention, self).__init__()
+
+        self.spec_conv = SpectralNorm(nn.Conv3d(2, 1, k_size, stride=1, padding=(k_size - 1) // 2))
+        self.sigmoid = nn.Sigmoid()
+        
+    def forward(self, x):
+        residual = x 
+
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+
+        x = self.spec_conv(x) 
+        x = self.sigmoid(x)
+
+        x = x * residual
+
+        return x
+
 if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 512, 10, 10, 10).cuda()
-    ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=5).cuda()
+    ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=5).cuda() #SpatialSpectralAttention(k_size=5).cuda()
     out = ssa(x)
     print(out.shape)

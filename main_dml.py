@@ -30,7 +30,7 @@ from sklearn.metrics import ndcg_score
 from config import *
 from utils.logger import get_logger
 from data_lidc.LIDC_VR_Scan import get_train_dataloader, get_test_dataloader
-from nets.dml_3dnet import DML3DNet, CircleLoss
+from nets.dml_3dnet import CircleLoss, DML3DNet
 
 #command parameters
 parser = argparse.ArgumentParser(description='For 3D Image Retrieval')
@@ -63,7 +63,7 @@ def Train():
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
     #define loss function
-    criterion = CircleLoss(scale=8).cuda() #nn.CrossEntropyLoss().cuda()
+    criterion = CircleLoss(scale=8).cuda() # nn.CrossEntropyLoss().cuda()
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
