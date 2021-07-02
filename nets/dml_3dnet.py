@@ -21,9 +21,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from PIL import Image
 #define by myself
 from nets.csa_3d import ChannelSpectralAttention
-from nets.ssa_3d import SpatialSpectralAttention
+from nets.ssa_3d import SpatialSpectralAttention, SpectralNorm
 #from csa_3d import ChannelSpectralAttention
-#from ssa_3d import SpatialSpectralAttention
+#from ssa_3d import SpatialSpectralAttention, SpectralNorm
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
 class CircleLoss(nn.Module):
@@ -71,11 +71,9 @@ class ConvBlock(nn.Module):
         self.conv3d = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size,
                                 stride=stride, padding=padding)
         self.batch_norm = nn.BatchNorm3d(num_features=out_channels)
-        self.csa = ChannelSpectralAttention(k_size=3) 
 
     def forward(self, x):
         x = self.conv3d(x)
-        x = self.csa(x)
         x = self.batch_norm(x)
         x = F.elu(x)
         return x
@@ -139,8 +137,8 @@ class DML3DNet(nn.Module):
         super(DML3DNet, self).__init__()
         self.backbone = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
 
-        #self.csa = ChannelSpectralAttention(k_size=3)
-        #self.ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=3) 
+        self.csa = ChannelSpectralAttention(k_size=3)
+        self.ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=3) 
 
         self.gem = GeMLayer()
 
@@ -149,11 +147,11 @@ class DML3DNet(nn.Module):
         x = self.backbone(x)
 
         #channel-wise
-        x_c = x #self.csa(x)
+        x_c = self.csa(x)
         x_c = self.gem(x_c).view(x_c.size(0), -1)
 
         #spatial-wise
-        x_s = x #self.ssa(x)
+        x_s = self.ssa(x)
         x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
         x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
         x_s = self.gem(x_s).view(x_s.size(0), -1)
