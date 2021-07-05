@@ -2,7 +2,7 @@
 """
 3D Retrieval Model for CT Image.
 Author: Jason.Fang
-Update time: 06/06/2021
+Update time: 02/07/2021
 """
 import re
 import numpy as np
@@ -20,10 +20,7 @@ from torch.autograd import Variable
 from sklearn.metrics.pairwise import cosine_similarity
 from PIL import Image
 #define by myself
-from nets.csa_3d import ChannelSpectralAttention
-from nets.ssa_3d import SpatialSpectralAttention, SpectralNorm
-#from csa_3d import ChannelSpectralAttention
-#from ssa_3d import SpatialSpectralAttention, SpectralNorm
+from nets.bayes_conv import BayesConvNd
 
 #https://github.com/qianjinhao/circle-loss/blob/master/circle_loss.py
 class CircleLoss(nn.Module):
@@ -68,8 +65,9 @@ class CircleLoss(nn.Module):
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, k_size=3, stride=1, padding=1):
         super(ConvBlock, self).__init__()
-        self.conv3d = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size,
-                                stride=stride, padding=padding)
+
+        #self.conv3d = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size, stride=stride, padding=padding)
+        self.conv3d = BayesConvNd(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size, convN=3, stride=1)
         self.batch_norm = nn.BatchNorm3d(num_features=out_channels)
 
     def forward(self, x):
@@ -113,6 +111,30 @@ class Conv3DNet(nn.Module):
                 x = op(x)
         return x
 
+#Channel spectral attention
+class ChannelBayesianAttention(nn.Module):
+    """ Constructs a CBA module.
+        Args:k_size: kernel size
+    """
+    def __init__(self, k_size=3):
+        super(ChannelBayesianAttention, self).__init__()
+        self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
+        self.bayes_conv = BayesConvNd(in_channels=1, out_channels=1, kernel_size=k_size, convN=1, stride=1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        #cross-channel
+        y = self.avg_3dpool(x) 
+        y = y.squeeze(-1).squeeze(-1).transpose(-1, -2) #(B, C, 1, 1, 1) -> (B, C, 1)->(B, 1, C)
+
+        y = self.bayes_conv(y) #local uncertain-dependencies
+        y = y.transpose(2, 1).unsqueeze(-1).unsqueeze(-1) #(B, 1, C)-> (B, C, 1)-> (B, C, 1, 1)-> (B, C, 1, 1, 1)
+
+        y = self.sigmoid(y)
+        x = x * y.expand_as(x)# Multi-scale information fusion
+
+        return x
+
 # Generalized-Mean (GeM) pooling layer
 # https://arxiv.org/pdf/1711.02512.pdf 
 class GeMLayer(nn.Module):
@@ -135,35 +157,22 @@ class GeMLayer(nn.Module):
 class DML3DNet(nn.Module):
     def __init__(self, in_channels, model_depth=4):
         super(DML3DNet, self).__init__()
+
         self.backbone = Conv3DNet(in_channels=in_channels, model_depth=model_depth)
-
-        self.csa = ChannelSpectralAttention(k_size=3)
-        self.ssa = SpatialSpectralAttention(in_ch=512, k=2, k_size=3) 
-
+        self.cba = ChannelBayesianAttention(k_size=3)
         self.gem = GeMLayer()
 
     def forward(self, x):
 
         x = self.backbone(x)
+        x = self.cba(x)
+        x = self.gem(x).view(x.size(0), -1)
 
-        #channel-wise
-        x_c = self.csa(x)
-        x_c = self.gem(x_c).view(x_c.size(0), -1)
-
-        #spatial-wise
-        x_s = self.ssa(x)
-        x_s = x_s.view(x_s.size(0), x_s.size(1), x_s.size(2)*x_s.size(3)*x_s.size(4))
-        x_s = x_s.permute(0, 2, 1).unsqueeze(-1).unsqueeze(-1)
-        x_s = self.gem(x_s).view(x_s.size(0), -1)
-
-        #concate
-        x = torch.cat((x_c, x_s),1)
-        
         return x
 
 if __name__ == "__main__":
     #for debug  
-    scan =  torch.rand(8, 1, 80, 80, 80).cuda()
+    scan =  torch.rand(2, 1, 80, 80, 80).cuda()
     model = DML3DNet(in_channels=1).cuda()
     out = model(scan)
     print(out.shape)
