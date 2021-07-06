@@ -66,9 +66,11 @@ class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, k_size=3, stride=1, padding=1):
         super(ConvBlock, self).__init__()
 
-        #self.conv3d = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size, stride=stride, padding=padding)
-        self.conv3d = BayesConvNd(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size, convN=3, stride=1)
+        self.conv3d = nn.Conv3d(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size, stride=stride, padding=padding)
         self.batch_norm = nn.BatchNorm3d(num_features=out_channels)
+
+        #self.conv3d = BayesConvNd(in_channels=in_channels, out_channels=out_channels, kernel_size=k_size, convN=3, stride=1)
+        #self.batch_norm = SpectralNorm()
 
     def forward(self, x):
         x = self.conv3d(x)
@@ -119,7 +121,7 @@ class ChannelBayesianAttention(nn.Module):
     def __init__(self, k_size=3):
         super(ChannelBayesianAttention, self).__init__()
         self.avg_3dpool = nn.AdaptiveAvgPool3d(1)
-        self.bayes_conv = BayesConvNd(in_channels=1, out_channels=1, kernel_size=k_size, convN=1, stride=1)
+        self.bayes_conv = BayesConvNd(in_channels=1, out_channels=1, kernel_size=k_size, convN=1, stride=1, power_iterations=1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
