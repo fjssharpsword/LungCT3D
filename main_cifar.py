@@ -1,6 +1,6 @@
 # encoding: utf-8
 """
-Training implementation for MNIST dataset.  
+Training implementation for CIFAR10 dataset  
 Author: Jason.Fang
 Update time: 07/07/2021
 """
@@ -19,23 +19,26 @@ import torchvision.transforms as transforms
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
-import math
+import matplotlib.pyplot as plt
 #define by myself
 from nets.dml_2dnet_res import bayes_resnet18
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 20
 batch_size = 320
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/resnet_mnist_best.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/resnet_cifar_best.pkl'
+#https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
 def Train():
     print('********************load data********************')
-    root = '/data/tmpexec/mnist'
+    root = '/data/tmpexec/cifar'
     if not os.path.exists(root):
         os.mkdir(root)
-    trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
+    trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
     # if not exist, download mnist dataset
-    train_set = dset.MNIST(root=root, train=True, transform=trans, download=True)
-    test_set = dset.MNIST(root=root, train=False, transform=trans, download=True)
+    train_set = dset.CIFAR10(root=root, train=True, transform=trans, download=True)
+    test_set = dset.CIFAR10(root=root, train=False, transform=trans, download=True)
+    classes = ('plane', 'car', 'bird', 'cat','deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     train_loader = torch.utils.data.DataLoader(
                     dataset=train_set,
@@ -64,7 +67,7 @@ def Train():
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
-    acc_min = 0.50 #float('inf')
+    loss_min = float('inf')
     for epoch in range(max_epoches):
         since = time.time()
         print('Epoch {}/{}'.format(epoch+1 , max_epoches))
@@ -72,7 +75,7 @@ def Train():
         model.train()  #set model to training mode
         loss_train = []
         with torch.autograd.enable_grad():
-            for batch_idx, (img, lbl) in enumerate(test_loader):
+            for batch_idx, (img, lbl) in enumerate(train_loader):
                 #forward
                 var_image = torch.autograd.Variable(img).cuda()
                 var_label = torch.autograd.Variable(lbl).cuda()
@@ -106,12 +109,11 @@ def Train():
                 correct_cnt += (pred_label == var_label.data).sum()
                 sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
                 sys.stdout.flush()
-        acc = correct_cnt * 1.0 / total_cnt
-        print("\r Eopch: %5d test loss = %.6f, ACC = %.6f" % (epoch + 1, np.mean(loss_test), acc) )
+        print("\r Eopch: %5d test loss = %.6f, ACC = %.6f" % (epoch + 1, np.mean(loss_test), correct_cnt * 1.0 / total_cnt) )
 
         # save checkpoint
-        if acc_min < acc:
-            acc_min = acc
+        if loss_min > np.mean(loss_test):
+            loss_min = np.mean(loss_test)
             torch.save(model.module.state_dict(), CKPT_PATH) #Saving torch.nn.DataParallel Models
             print(' Epoch: {} model has been already save!'.format(epoch + 1))
 
@@ -119,60 +121,10 @@ def Train():
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
 
 def Test():
-    print('********************load data********************')
-    root = '/data/tmpexec/mnist'
-    if not os.path.exists(root):
-        os.mkdir(root)
-    trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
-    # if not exist, download mnist dataset
-    train_set = dset.MNIST(root=root, train=True, transform=trans, download=True)
-    test_set = dset.MNIST(root=root, train=False, transform=trans, download=True)
-
-    train_loader = torch.utils.data.DataLoader(
-                    dataset=train_set,
-                    batch_size=batch_size,
-                    shuffle=True, num_workers=8)
-    test_loader = torch.utils.data.DataLoader(
-                    dataset=test_set,
-                    batch_size=batch_size,
-                    shuffle=False, num_workers=8)
-
-    print ('==>>> total trainning batch number: {}'.format(len(train_loader)))
-    print ('==>>> total testing batch number: {}'.format(len(test_loader)))
-    print('********************load data succeed!********************')
-
-    print('********************load model********************')
-    model = bayes_resnet18(num_classes=10).cuda()
-    if os.path.exists(CKPT_PATH):
-        checkpoint = torch.load(CKPT_PATH)
-        model.load_state_dict(checkpoint) #strict=False
-        print("=> Loaded well-trained checkpoint from: " + CKPT_PATH)
-    model.eval()#turn to test mode
-    print('********************load model succeed!********************')
-
-    print('********************begin Testing!********************')
-    acc_list = []
-    for epoch in range(max_epoches): 
-        total_cnt, correct_cnt = 0, 0 
-        with torch.autograd.no_grad():
-            for batch_idx,  (img, lbl) in enumerate(train_loader):
-                #forward
-                var_image = torch.autograd.Variable(img).cuda()
-                var_label = torch.autograd.Variable(lbl).cuda()
-                var_out = model(var_image)
-                _, pred_label = torch.max(var_out.data, 1)
-                total_cnt += var_image.data.size()[0]
-                correct_cnt += (pred_label == var_label.data).sum()
-                sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
-                sys.stdout.flush()
-        acc = correct_cnt * 1.0 / total_cnt
-        ci  = 1.96 * math.sqrt( (acc * (1 - acc)) / total_cnt) #1.96-95%
-        print("\r ACC/CI = %.6f/%.3f" % (acc, ci) )
-        acc_list.append(acc.item())
-    print("\r Num of sampling = %5d, Mean = %.6f, Var = %.6f" % (max_epoches, np.mean(acc_list), np.var(acc_list)) )
+    pass
 
 def main():
-    #Train()
+    Train()
     Test()
 
 if __name__ == '__main__':
