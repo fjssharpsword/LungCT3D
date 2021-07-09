@@ -20,7 +20,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
 import math
+from thop import profile
 #define by myself
+from utils.common import count_bytes
 from nets.dml_2dnet_res import bayes_resnet18
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
@@ -37,17 +39,23 @@ def Train():
     train_set = dset.MNIST(root=root, train=True, transform=trans, download=True)
     test_set = dset.MNIST(root=root, train=False, transform=trans, download=True)
 
+    #split train set and val set
+    full_set = train_set
+    train_size = int(0.8 * len(full_set))
+    val_size = len(full_set) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(full_set, [train_size, val_size])
+
     train_loader = torch.utils.data.DataLoader(
-                    dataset=train_set,
+                    dataset=train_dataset,
                     batch_size=batch_size,
                     shuffle=True, num_workers=8)
-    test_loader = torch.utils.data.DataLoader(
-                    dataset=test_set,
+    val_loader = torch.utils.data.DataLoader(
+                    dataset=val_dataset,
                     batch_size=batch_size,
                     shuffle=False, num_workers=8)
 
     print ('==>>> total trainning batch number: {}'.format(len(train_loader)))
-    print ('==>>> total testing batch number: {}'.format(len(test_loader)))
+    print ('==>>> total validation batch number: {}'.format(len(val_loader)))
     print('********************load data succeed!********************')
 
     print('********************load model********************')
@@ -72,7 +80,7 @@ def Train():
         model.train()  #set model to training mode
         loss_train = []
         with torch.autograd.enable_grad():
-            for batch_idx, (img, lbl) in enumerate(test_loader):
+            for batch_idx, (img, lbl) in enumerate(train_loader):
                 #forward
                 var_image = torch.autograd.Variable(img).cuda()
                 var_label = torch.autograd.Variable(lbl).cuda()
@@ -94,7 +102,7 @@ def Train():
         loss_test = []
         total_cnt, correct_cnt = 0, 0
         with torch.autograd.no_grad():
-            for batch_idx,  (img, lbl) in enumerate(train_loader):
+            for batch_idx,  (img, lbl) in enumerate(val_loader):
                 #forward
                 var_image = torch.autograd.Variable(img).cuda()
                 var_label = torch.autograd.Variable(lbl).cuda()
@@ -151,28 +159,33 @@ def Test():
     print('********************load model succeed!********************')
 
     print('********************begin Testing!********************')
-    acc_list = []
-    for epoch in range(max_epoches): 
-        total_cnt, correct_cnt = 0, 0 
-        with torch.autograd.no_grad():
-            for batch_idx,  (img, lbl) in enumerate(train_loader):
-                #forward
-                var_image = torch.autograd.Variable(img).cuda()
-                var_label = torch.autograd.Variable(lbl).cuda()
-                var_out = model(var_image)
-                _, pred_label = torch.max(var_out.data, 1)
-                total_cnt += var_image.data.size()[0]
-                correct_cnt += (pred_label == var_label.data).sum()
-                sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
-                sys.stdout.flush()
-        acc = correct_cnt * 1.0 / total_cnt
-        ci  = 1.96 * math.sqrt( (acc * (1 - acc)) / total_cnt) #1.96-95%
-        print("\r ACC/CI = %.6f/%.3f" % (acc, ci) )
-        acc_list.append(acc.item())
-    print("\r Num of sampling = %5d, Mean = %.6f, Var = %.6f" % (max_epoches, np.mean(acc_list), np.var(acc_list)) )
+    total_cnt, correct_cnt = 0, 0 
+    time_res = []
+    with torch.autograd.no_grad():
+        for batch_idx,  (img, lbl) in enumerate(test_loader):
+            #forward
+            var_image = torch.autograd.Variable(img).cuda()
+            var_label = torch.autograd.Variable(lbl).cuda()
+            start = time.time()
+            var_out = model(var_image)
+            end = time.time()
+            time_res.append(end-start)
+            _, pred_label = torch.max(var_out.data, 1)
+            total_cnt += var_image.data.size()[0]
+            correct_cnt += (pred_label == var_label.data).sum()
+            sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
+            sys.stdout.flush()
+    acc = correct_cnt * 1.0 / total_cnt
+    ci  = 1.96 * math.sqrt( (acc * (1 - acc)) / total_cnt) #1.96-95%
+    print("\r ACC/CI = %.4f/%.4f" % (acc, ci) )
+    print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
+    param = sum(p.numel() for p in model.parameters() if p.requires_grad) #count params of model
+    print("\r Params of model: {}".format(count_bytes(param)) )
+    flops, _ = profile(model, inputs=(var_image,))
+    print("FLOPs(Floating Point Operations) of model = {}".format(count_bytes(flops)) )
 
 def main():
-    #Train()
+    Train()
     Test()
 
 if __name__ == '__main__':

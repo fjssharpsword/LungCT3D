@@ -21,9 +21,10 @@ class ChannelBayesianAttention(nn.Module):
     """
     def __init__(self, k_size=3):
         super(ChannelBayesianAttention, self).__init__()
+
         self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
         #self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
-        self.bayes_conv = BayesConvNd(in_channels=1, out_channels=1, kernel_size=k_size, convN=1, stride=1, power_iterations=10)
+        self.bayes_conv = BayesConvNd(in_channels=1, out_channels=1, kernel_size=k_size, convN=1, stride=1, power_iterations=1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -40,15 +41,17 @@ class ChannelBayesianAttention(nn.Module):
 
         return x
 
+
 #spatial Bayesian Attention (CBAM)
-class SpatialBayesianAttention(nn.Module):
+class SpatialBayesianAttention_CBAM(nn.Module):
     """ Constructs a SBA module.
         Args:k_size: kernel size
     """
     def __init__(self, k_size=3):
-        super(SpatialBayesianAttention, self).__init__()
+        super(SpatialBayesianAttention_CBAM, self).__init__()
+
         #self.conv = nn.Conv2d(2, 1, k_size, stride=1, padding=(k_size - 1) // 2)
-        self.bayes_conv = BayesConvNd(in_channels=2, out_channels=1, kernel_size=k_size, convN=2, stride=1, power_iterations=10)
+        self.bayes_conv = BayesConvNd(in_channels=2, out_channels=1, kernel_size=k_size, convN=2, stride=1, power_iterations=1)
         self.sigmoid = nn.Sigmoid()
         
     def forward(self, x):
@@ -65,6 +68,66 @@ class SpatialBayesianAttention(nn.Module):
         x = x * residual
 
         return x
+
+class SpatialBayesianAttention(nn.Module): 
+    def __init__(self, in_ch, k, k_size=3):
+        super(SpatialBayesianAttention, self).__init__()
+
+        self.in_ch = in_ch
+        self.out_ch = in_ch
+        self.mid_ch = in_ch // k
+
+        self.f = nn.Sequential(
+            nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1)),
+            nn.BatchNorm2d(self.mid_ch),
+            nn.ReLU())
+        self.g = nn.Sequential(
+            nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1)),
+            nn.BatchNorm2d(self.mid_ch),
+            nn.ReLU())
+        self.h = nn.Conv2d(self.in_ch, self.mid_ch, (1, 1), (1, 1))
+        self.v = nn.Conv2d(self.mid_ch, self.out_ch, (1, 1), (1, 1))
+
+        self.softmax = nn.Softmax(dim=-1)
+
+        for conv in [self.f, self.g, self.h]: 
+            conv.apply(weights_init)
+        self.v.apply(constant_init)
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+
+        f_x = self.f(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
+        g_x = self.g(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
+        h_x = self.h(x).view(B, self.mid_ch, H * W)  # B * mid_ch * N, where N = H*W
+
+        z = torch.bmm(f_x.permute(0, 2, 1), g_x)  # B * N * N, where N = H*W
+        attn = self.softmax((self.mid_ch ** -.50) * z)
+
+        z = torch.bmm(attn, h_x.permute(0, 2, 1))  # B * N * mid_ch, where N = H*W
+        z = z.permute(0, 2, 1).view(B, self.mid_ch, H, W)  # B * mid_ch * H * W
+
+        z = self.v(z)
+        x = torch.add(z, x) # z + x
+        return x
+
+## Kaiming weight initialisation
+def weights_init(module):
+    if isinstance(module, nn.ReLU):
+        pass
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
+        nn.init.kaiming_normal_(module.weight.data)
+        nn.init.constant_(module.bias.data, 0.0)
+    elif isinstance(module, nn.BatchNorm2d):
+        pass
+def constant_init(module):
+    if isinstance(module, nn.ReLU):
+        pass
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.ConvTranspose2d):
+        nn.init.constant_(module.weight.data, 0.0)
+        nn.init.constant_(module.bias.data, 0.0)
+    elif isinstance(module, nn.BatchNorm2d):
+        pass
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -85,8 +148,8 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
-        self.cba = ChannelBayesianAttention(k_size=3) #attention
-        self.sba = SpatialBayesianAttention(k_size=3)
+        #self.cba = ChannelBayesianAttention(k_size=k_size) #attention
+        self.sba = SpatialBayesianAttention(in_ch=planes, k=2, k_size=k_size)
 
     def forward(self, x):
         residual = x
@@ -97,7 +160,7 @@ class BasicBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
 
-        x = self.cba(x) #attention
+        #x = self.cba(x) #attention
         x = self.sba(x)
 
         if self.downsample is not None:
@@ -226,13 +289,9 @@ def bayes_resnet152(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     return model
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
 if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 1, 128, 128).cuda()
     model = bayes_resnet18(num_classes=10).cuda()
     out = model(x)
     print(out.shape)
-    print(count_parameters(model))
