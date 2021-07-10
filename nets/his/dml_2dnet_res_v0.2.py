@@ -11,8 +11,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 #define by myself
-from nets.unconv import BayesConvNd
-#from unconv import BayesConvNd
+from nets.bayes_conv import BayesConvNd
+#from bayes_conv import BayesConvNd
 
 #Channel Bayesian attention
 class ChannelBayesianAttention(nn.Module):

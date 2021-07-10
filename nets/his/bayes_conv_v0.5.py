@@ -45,7 +45,7 @@ class BayesConvNd(Module):
 
         #prior 
         if priors is None:
-            priors = {'prior_mu': 0, 'prior_sigma': 0.1}
+            priors = {'prior_mu': 0, 'prior_sigma': 1}
         self.prior_mu = priors['prior_mu']
         self.prior_sigma = priors['prior_sigma']
         self.prior_log_sigma = math.log(self.prior_sigma)

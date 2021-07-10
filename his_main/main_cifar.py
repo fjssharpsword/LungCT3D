@@ -24,7 +24,7 @@ import math
 from thop import profile
 #define by myself
 from utils.common import count_bytes
-from nets.dml_2dnet_res import bayes_resnet18
+from nets.dml_2dnet_res import BayesDenseNet121
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 20
@@ -63,7 +63,7 @@ def Train():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = bayes_resnet18(num_classes=100)
+    model = BayesDenseNet121(num_classes=100)
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -156,7 +156,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = bayes_resnet18(num_classes=100).cuda()
+    model = BayesDenseNet121(num_classes=100).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
