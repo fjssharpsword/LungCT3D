@@ -33,4 +33,10 @@ def count_bytes(file_size):
         level = -1
     return ( '{}.{:>03d} {}'.format(integer, remainder, units[level]) )
 
-    
+def compute_AUCs(gt, pred, N_CLASSES):
+    AUROCs = []
+    gt_np = gt.cpu().numpy()
+    pred_np = pred.cpu().numpy()
+    for i in range(N_CLASSES):
+        AUROCs.append(roc_auc_score(gt_np[:, i], pred_np[:, i]))
+    return AUROCs
