@@ -1,6 +1,18 @@
+# encoding: utf-8
+"""
+Bayesian convolution with spectral weight for 2D UNet.
+Author: Jason.Fang
+Update time: 12/07/2021
+"""
+import sys
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
+#define by myself
+from nets.unconv import BayesConvNd
+#from unconv import BayesConvNd
 
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
@@ -11,9 +23,11 @@ class DoubleConv(nn.Module):
             mid_channels = out_channels
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
+            #BayesConvNd(in_channels=in_channels, out_channels=mid_channels, kernel_size=3, convN=2, stride=1, power_iterations=1),
             nn.BatchNorm2d(mid_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
+            #BayesConvNd(in_channels=mid_channels, out_channels=out_channels, kernel_size=3, convN=2, stride=1, power_iterations=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
@@ -109,28 +123,10 @@ class UNet(nn.Module):
         logits = self.sigmoid(logits)
         return logits
 
-class DiceLoss(nn.Module):
-    def __init__(self):
-	    super(DiceLoss, self).__init__()
- 
-    def	forward(self, input, target):
-        N = target.size(0)
-        smooth = 1
-    
-        input_flat = input.view(N, -1)
-        target_flat = target.view(N, -1)
-    
-        intersection = input_flat * target_flat
-    
-        loss = 2 * (intersection.sum(1) + smooth) / (input_flat.sum(1) + target_flat.sum(1) + smooth)
-        loss = 1 - loss.sum() / N
-    
-        return loss
-
 if __name__ == "__main__":
     #epochs = 100
     #for debug   
-    img = torch.rand(32, 3, 224, 224)#.to(torch.device('cuda:%d'%4))
-    unet = UNet(n_channels=3, n_classes=2)
+    img = torch.rand(2, 3, 256, 256).cuda()
+    unet = UNet(n_channels=3, n_classes=2).cuda()
     out = unet(img)
     print(out.size())

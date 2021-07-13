@@ -10,6 +10,7 @@ import os
 import cv2
 import time
 import argparse
+import math
 import numpy as np
 import pandas as pd
 import torch
@@ -23,6 +24,7 @@ from skimage.measure import label
 from sklearn.metrics import roc_auc_score, roc_curve, auc, f1_score, confusion_matrix
 from sklearn.metrics.pairwise import cosine_similarity
 import matplotlib.pyplot as plt
+from thop import profile
 #define by myself
 from utils.common import compute_AUCs, count_bytes
 from data_cxr2d.vincxr_dataloader import get_train_dataloader_VIN, get_test_dataloader_VIN
@@ -30,12 +32,11 @@ from nets.resnet2d import bayes_resnet18
 
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
-classname_to_labelid = {'No finding':0, 'Aortic enlargement':1, 'Atelectasis':2, 'Calcification':3, 'Cardiomegaly':4,
-    		   	   'Consolidation':5, 'ILD':6, 'Infiltration':7, 'Lung Opacity':8, 'Nodule/Mass':9,
-               	   'Other lesion':10, 'Pleural effusion':11, 'Pleural thickening':12, 'Pneumothorax':13, 'Pulmonary fibrosis':14}
+CLASS_NAMES_Vin = ['No finding', 'Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
+        'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis']
 BATCH_SIZE = 256
 MAX_EPOCHS = 20
-NUM_CLASSES =  len(classname_to_labelid)
+NUM_CLASSES =  len(CLASS_NAMES_Vin)
 CKPT_PATH = '/data/pycode/LungCT3D/ckpt/resnet2d_best.pkl'
 def Train():
     print('********************load data********************')
@@ -47,7 +48,7 @@ def Train():
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
-        print("=> Loaded well-trained CVTECXRNet model checkpoint of Vin-CXR dataset: "+CKPT_PATH)
+        print("=> Loaded well-trained classification model checkpoint of Vin-CXR dataset: "+CKPT_PATH)
     model = nn.DataParallel(model).cuda()  # make model available multi GPU cores training    
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
@@ -91,7 +92,7 @@ def Train():
 
 def Test():
     print('********************load data********************')
-    dataloader_test = get_test_dataloader_VIN(batch_size=BATCH_SIZE, shuffle=False, num_workers=8) #
+    dataloader_test = get_test_dataloader_VIN(batch_size=32, shuffle=False, num_workers=8) #BATCH_SIZE
     print('********************load data succeed!********************')
 
     print('********************load model********************')
@@ -99,7 +100,7 @@ def Test():
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
-        print("=> Loaded well-trained CVTECXRNet model checkpoint of Vin-CXR dataset: "+CKPT_PATH)
+        print("=> Loaded well-trained classification model checkpoint of Vin-CXR dataset: "+CKPT_PATH)
     model.eval()
     print('******************** load model succeed!********************')
 
@@ -125,7 +126,7 @@ def Test():
     for i in range(NUM_CLASSES):
         auc = roc_auc_score(gt_np[:, i], pred_np[:, i])
         AUROCs.append(auc)
-        print('The AUROC of {} is {:.4f}'.format(auc))
+        print('The AUROC of {} is {:.4f}'.format(CLASS_NAMES_Vin[i], auc))
     print("\r Average AUROC = %.4f" % (np.mean(AUROCs)))
     #model
     print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
@@ -135,7 +136,7 @@ def Test():
     print("FLOPs(Floating Point Operations) of model = {}".format(count_bytes(flops)) )
 
 def main():
-    #Train()
+    Train()
     Test()
 
 if __name__ == '__main__':

@@ -28,6 +28,8 @@ https://www.kaggle.com/c/vinbigdata-chest-xray-abnormalities-detection/data
 1) 150,000 X-ray images with disease labels and bounding box
 2) Label:['Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
         'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis', 'No Finding']
+   CLASS_NAMES_Vin = ['No finding', 'Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
+        'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis']
 """
 class DatasetGenerator(Dataset):
     def __init__(self, path_to_img_dir, path_to_dataset_file):
@@ -80,8 +82,8 @@ class DatasetGenerator(Dataset):
         box = self.boxes[index]
         mask = self._get_seg(box, height, width)
         mask = Image.fromarray(mask).resize((256, 256)) #numpy to pil image
-        mask = torch.as_tensor(np.array(mask), dtype=torch.float32)
-        #mask = transforms.ToTensor()(np.array(mask))
+        #mask = torch.as_tensor(np.array(mask), dtype=torch.float32).unsqueeze(0)
+        mask = torch.as_tensor(np.array(mask), dtype=torch.long)
         
         return image, label, mask
 

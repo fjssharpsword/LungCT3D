@@ -23,8 +23,8 @@ class ChannelBayesianAttention(nn.Module):
         super(ChannelBayesianAttention, self).__init__()
 
         self.avg_2dpool = nn.AdaptiveAvgPool2d(1)
-        #self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
-        self.bayes_conv = BayesConvNd(in_channels=1, out_channels=1, kernel_size=k_size, convN=1, stride=1, power_iterations=1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
+        #self.bayes_conv = BayesConvNd(in_channels=1, out_channels=1, kernel_size=k_size, convN=1, stride=1, power_iterations=1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -32,8 +32,8 @@ class ChannelBayesianAttention(nn.Module):
         y = self.avg_2dpool(x) 
         y = y.squeeze(-1).transpose(-1, -2) #(B, C, 1, 1) -> (B, C, 1)->(B, 1, C)
 
-        #y = self.conv(y) #local uncertain-dependencies
-        y = self.bayes_conv(y) 
+        y = self.conv(y) #local uncertain-dependencies
+        #y = self.bayes_conv(y) 
         y = y.transpose(2, 1).unsqueeze(-1) #(B, 1, C)-> (B, C, 1)-> (B, C, 1, 1)
 
         y = self.sigmoid(y)
@@ -50,8 +50,8 @@ class SpatialBayesianAttention_CBAM(nn.Module):
     def __init__(self, k_size=3):
         super(SpatialBayesianAttention_CBAM, self).__init__()
 
-        #self.conv = nn.Conv2d(2, 1, k_size, stride=1, padding=(k_size - 1) // 2)
-        self.bayes_conv = BayesConvNd(in_channels=2, out_channels=1, kernel_size=k_size, convN=2, stride=1, power_iterations=1)
+        self.conv = nn.Conv2d(2, 1, k_size, stride=1, padding=(k_size - 1) // 2)
+        #self.bayes_conv = BayesConvNd(in_channels=2, out_channels=1, kernel_size=k_size, convN=2, stride=1, power_iterations=1)
         self.sigmoid = nn.Sigmoid()
         
     def forward(self, x):
@@ -61,8 +61,8 @@ class SpatialBayesianAttention_CBAM(nn.Module):
         max_out, _ = torch.max(x, dim=1, keepdim=True)
         x = torch.cat([avg_out, max_out], dim=1)
 
-        #x = self.conv(x)  
-        x = self.bayes_conv(x)
+        x = self.conv(x)  
+        #x = self.bayes_conv(x)
         x = self.sigmoid(x)
 
         x = x * residual
@@ -152,7 +152,8 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
-        #self.cba = ChannelBayesianAttention(k_size=k_size) #attention
+        self.cba = ChannelBayesianAttention(k_size=k_size) #attention
+        self.sba = SpatialBayesianAttention_CBAM(k_size=k_size)
         #self.sba = SpatialBayesianAttention(in_ch=planes, k=2, k_size=k_size)
 
     def forward(self, x):
@@ -164,8 +165,8 @@ class BasicBlock(nn.Module):
         out = self.conv2(out)
         out = self.bn2(out)
 
-        #out = self.cba(out) #attention
-        #out = self.sba(out)
+        out = self.cba(out) #attention
+        out = self.sba(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
