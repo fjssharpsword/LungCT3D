@@ -34,7 +34,7 @@ from nets.unet2d import UNet
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 CLASS_NAMES_Vin = ['No finding', 'Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
         'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis']
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
 CKPT_PATH = '/data/pycode/LungCT3D/ckpt/unet2d_best.pkl'
@@ -44,7 +44,7 @@ def Train():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = UNet(n_channels=3, n_classes=2)
+    model = UNet(n_channels=3, n_classes=1)
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -53,7 +53,7 @@ def Train():
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
     torch.backends.cudnn.benchmark = True  # improve train speed slightly
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCELoss() #nn.CrossEntropyLoss()
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
@@ -96,7 +96,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = UNet(n_channels=3, n_classes=2).cuda()
+    model = UNet(n_channels=3, n_classes=1).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -115,14 +115,13 @@ def Test():
             var_out = model(var_image)
             end = time.time()
             time_res.append(end-start)
-            _, pred_label = torch.max(var_out.data.cpu(), 1) #0 or 1
-            pred = torch.cat((pred, pred_label), 0)
+            pred = torch.cat((pred, var_out.data.cpu()), 0) #prob
             gt = torch.cat((gt, mask), 0)
             sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
             sys.stdout.flush()
     #metric
     gt_np = gt.numpy()
-    pred_np = pred.numpy()
+    pred_np = np.where(pred.numpy() > 0.5, 1, 0)#pred.numpy()
     # Compute Dice coefficient
     intersection = np.logical_and(gt_np, pred_np)
     dice_coe = 2. * intersection.sum() / (gt_np.sum() + pred_np.sum())
@@ -135,7 +134,7 @@ def Test():
     print("FLOPs(Floating Point Operations) of model = {}".format(count_bytes(flops)) )
 
 def main():
-    #Train()
+    Train()
     Test()
 
 if __name__ == '__main__':

@@ -49,7 +49,6 @@ class Down(nn.Module):
     def forward(self, x):
         return self.maxpool_conv(x)
 
-
 class Up(nn.Module):
     """Upscaling then double conv"""
 
@@ -63,7 +62,6 @@ class Up(nn.Module):
         else:
             self.up = nn.ConvTranspose2d(in_channels , in_channels // 2, kernel_size=2, stride=2)
             self.conv = DoubleConv(in_channels, out_channels)
-
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
@@ -127,6 +125,6 @@ if __name__ == "__main__":
     #epochs = 100
     #for debug   
     img = torch.rand(2, 3, 256, 256).cuda()
-    unet = UNet(n_channels=3, n_classes=2).cuda()
+    unet = UNet(n_channels=3, n_classes=1).cuda()
     out = unet(img)
     print(out.size())

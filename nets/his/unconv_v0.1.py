@@ -51,7 +51,7 @@ class BayesConvNd(Module):
         self.prior_log_sigma = math.log(self.prior_sigma)
 
         #spectral 
-        self.spec_v = Parameter(torch.empty(out_channels)) #requires_grad=False
+        #self.spec_v = Parameter(torch.empty(out_channels)) #requires_grad=False
 
         #posterior weight: mean and variance
         self.W_mu = Parameter(torch.empty((out_channels, in_channels, *self.kernel_size)))
@@ -77,8 +77,8 @@ class BayesConvNd(Module):
             self.bias_mu.data.uniform_(-stdv, stdv)
             self.bias_rho.data.fill_(self.prior_log_sigma)
         #spectral
-        self.spec_v.data.normal_(self.prior_mu, self.prior_sigma)
-        self.spec_v.data = self._l2normalize(self.spec_v.data)
+        #self.spec_v.data.normal_(self.prior_mu, self.prior_sigma)
+        #self.spec_v.data = self._l2normalize(self.spec_v.data)
 
     def _l2normalize(self, x, eps=1e-12):
         return x / (x.norm() + eps)
@@ -86,16 +86,20 @@ class BayesConvNd(Module):
     #weight regularization by spectral norm
     def _spec_norm(self, w):
 
-        height = w.data.shape[0]
+        #height = w.data.shape[0]
         #width = w.view(height, -1).data.shape[1]
-        assert height==self.spec_v.shape[0]
+        #assert height==self.spec_v.shape[0]
         
-        for _ in range(self.power_iterations):
-            spec_u = self._l2normalize(torch.mv(torch.t(w.view(height,-1).data), self.spec_v.data))
-            self.spec_v.data = self._l2normalize(torch.mv(w.view(height,-1).data, spec_u.data))
+        #for _ in range(self.power_iterations):
+        #    spec_u = self._l2normalize(torch.mv(torch.t(w.view(height,-1).data), self.spec_v.data))
+        #    self.spec_v.data = self._l2normalize(torch.mv(w.view(height,-1).data, spec_u.data))
 
         # sigma = torch.dot(u.data, torch.mv(w.view(height,-1).data, v.data))
-        sigma = self.spec_v.dot(w.view(height, -1).mv(spec_u))
+        #sigma = self.spec_v.dot(w.view(height, -1).mv(spec_u))
+
+        u, s, v = torch.svd(w.view(w.size(0), -1))
+        sigma =  torch.max(s)
+
         w = w / sigma.expand_as(w)
 
         return w

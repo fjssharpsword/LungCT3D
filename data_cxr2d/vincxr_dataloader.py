@@ -82,9 +82,8 @@ class DatasetGenerator(Dataset):
         box = self.boxes[index]
         mask = self._get_seg(box, height, width)
         mask = Image.fromarray(mask).resize((256, 256)) #numpy to pil image
-        #mask = torch.as_tensor(np.array(mask), dtype=torch.float32).unsqueeze(0)
-        mask = torch.as_tensor(np.array(mask), dtype=torch.long)
-        
+        mask = torch.as_tensor(np.array(mask), dtype=torch.float32).unsqueeze(0) #dtype=torch.long
+
         return image, label, mask
 
     def __len__(self):
