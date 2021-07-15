@@ -37,32 +37,22 @@ class SpecUnConv(nn.Module):
         self.module.register_parameter(self.name + "_u", u)
         self.module.register_parameter(self.name + "_v", v)
 
-        #distribution
-        n = self.module.in_channels
-        n *= self.module.kernel_size[0] ** 2
-        stdv = 1.0 / math.sqrt(n)
-        w_sigma = nn.Parameter(torch.empty(w.shape))#requires_grad=True
-        w_sigma.data.fill_(stdv)
-        self.module.register_parameter(self.name + "_sigma", w_sigma)
+        # distribution
+        w_mu = nn.Parameter(w.data) #requires_grad=True
+        self.module.register_parameter(self.name + "_mu", w_mu)
 
     def _update_weight(self):
-        
-        w = getattr(self.module, self.name)
+        #sample weights from distribution and impose spectral norm
+        w = getattr(self.module, self.name + "_mu")
         u = getattr(self.module, self.name + "_u")
         v = getattr(self.module, self.name + "_v")
-
-        #sample weight
-        s = getattr(self.module, self.name + "_sigma")
-        w_eps = (u.unsqueeze(1) * v.unsqueeze(0)).view_as(w)
-        w = w + w_eps*torch.log1p(torch.exp(s))
         
-        #impose spectral norm
         height = w.data.shape[0]
         for _ in range(1):#power_iterations=1
             v.data = self._l2normalize(torch.mv(torch.t(w.view(height,-1).data), u.data))
             u.data = self._l2normalize(torch.mv(w.view(height,-1).data, v.data))
         sigma = u.dot(w.view(height, -1).mv(v))
-        
+
         #del self.module._parameters[self.name]
         del self.module.weight #rewrite the weights
         setattr(self.module, self.name, w / sigma.expand_as(w))

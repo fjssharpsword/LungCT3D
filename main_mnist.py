@@ -23,11 +23,11 @@ import math
 from thop import profile
 #define by myself
 from utils.common import count_bytes
-from nets.dml_2dnet_res import bayes_resnet18
+from nets.resnet import resnet18
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
-max_epoches = 20
-batch_size = 320
+max_epoches = 50
+batch_size = 256
 CKPT_PATH = '/data/pycode/LungCT3D/ckpt/resnet_mnist_best.pkl'
 def Train():
     print('********************load data********************')
@@ -40,7 +40,7 @@ def Train():
     test_set = dset.MNIST(root=root, train=False, transform=trans, download=True)
 
     #split train set and val set
-    sample_size = int(0.1 * len(train_set)) #[1.0, 0.5, 0.1]
+    sample_size = int(1.0 * len(train_set)) #[1.0, 0.5, 0.1]
     train_set, _ = torch.utils.data.random_split(train_set, [sample_size, len(train_set) - sample_size])
     train_size = int(0.8 * len(train_set))#8:2
     val_size = len(train_set) - train_size
@@ -60,7 +60,7 @@ def Train():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = bayes_resnet18(num_classes=10)
+    model = resnet18(pretrained=False, num_classes=10)
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -116,7 +116,7 @@ def Train():
                 sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
                 sys.stdout.flush()
         acc = correct_cnt * 1.0 / total_cnt
-        print("\r Eopch: %5d test loss = %.6f, ACC = %.6f" % (epoch + 1, np.mean(loss_test), acc) )
+        print("\r Eopch: %5d val loss = %.6f, ACC = %.6f" % (epoch + 1, np.mean(loss_test), acc) )
 
         # save checkpoint
         if acc_min < acc:
@@ -151,7 +151,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = bayes_resnet18(num_classes=10).cuda()
+    model = resnet18(pretrained=False, num_classes=10).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False

@@ -15,7 +15,6 @@ from typing import Type, Any, Callable, Union, List, Optional
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
 #define by myself
 from nets.spec_unconv import SpecUnConv
-#from spec_unconv import SpecUnConv
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -35,14 +34,13 @@ model_urls = {
 }
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
-    #return SpecUnConv(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
-
+    #return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
+    return SpecUnConv(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
-
+    #return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    return SpecUnConv(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
 
 class BasicBlock(nn.Module):
     expansion: int = 1
@@ -150,7 +148,6 @@ class Bottleneck(nn.Module):
 
         return out
 
-
 class ResNet(nn.Module):
 
     def __init__(
@@ -180,8 +177,9 @@ class ResNet(nn.Module):
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+
+        self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)#adjust the channels of input
+
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -391,7 +389,7 @@ def wide_resnet101_2(pretrained: bool = False, progress: bool = True, **kwargs: 
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 3, 256, 256).cuda()
+    x =  torch.rand(2, 1, 128, 128).cuda()
     model = resnet18(pretrained=False, num_classes=10).cuda()
     out = model(x)
     print(out.shape)
