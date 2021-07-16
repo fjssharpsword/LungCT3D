@@ -12,9 +12,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules.utils import _single, _pair, _triple
 
-class SpecUnConv(nn.Module):
+class SpecConv(nn.Module):
     def __init__(self, module, name='weight'):
-        super(SpecUnConv, self).__init__()
+        super(SpecConv, self).__init__()
         self.module = module
         self.name = name
         self._make_params()
@@ -41,7 +41,7 @@ class SpecUnConv(nn.Module):
         n = self.module.in_channels
         n *= self.module.kernel_size[0] ** 2
         stdv = 1.0 / math.sqrt(n)
-        w_sigma = nn.Parameter(torch.empty(w.shape))#requires_grad=True
+        w_sigma = nn.Parameter(torch.empty(w.size()))#requires_grad=True
         w_sigma.data.fill_(stdv)
         self.module.register_parameter(self.name + "_sigma", w_sigma)
 
@@ -52,10 +52,11 @@ class SpecUnConv(nn.Module):
         v = getattr(self.module, self.name + "_v")
 
         #sample weight
-        s = getattr(self.module, self.name + "_sigma")
-        w_eps = (u.unsqueeze(1) * v.unsqueeze(0)).view_as(w)
-        w = w + w_eps*torch.log1p(torch.exp(s))
-        
+        w_sigma = getattr(self.module, self.name + "_sigma")
+        #w_eps = (u.unsqueeze(1) * v.unsqueeze(0)).view_as(w)
+        #w_eps = torch.empty(w.size()).normal_(0, 1).cuda()
+        w = w + torch.log1p(torch.exp(w_sigma)) #w_eps*torch.log1p(torch.exp(w_sigma))
+
         #impose spectral norm
         height = w.data.shape[0]
         for _ in range(1):#power_iterations=1
@@ -76,6 +77,6 @@ if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 3, 10, 10).cuda()
     #sconv = SpecUnConv(nn.Conv2d(3, 16, kernel_size=3, padding=(3 - 1) // 2, stride=1, bias=False)).cuda()
-    sconv = SpecUnConv(nn.Conv2d(3, 16, kernel_size=7, stride=2, padding=3, bias=False)).cuda()
+    sconv = SpecConv(nn.Conv2d(3, 16, kernel_size=7, stride=2, padding=3, bias=False)).cuda()
     out = sconv(x)
     print(out.shape)
