@@ -29,7 +29,7 @@ from nets.densenet import densenet121, densenet201
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 50
 batch_size = 256
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/densenet_cifar_best.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/densenet_cifar_best_sp.pkl'
 #https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
 def Train():
     print('********************load data********************')
@@ -62,7 +62,7 @@ def Train():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = densenet121(pretrained=False, num_classes=100)
+    model = densenet201(pretrained=False, num_classes=100)
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -155,7 +155,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = densenet121(pretrained=False, num_classes=100).cuda()
+    model = densenet201(pretrained=False, num_classes=100).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False

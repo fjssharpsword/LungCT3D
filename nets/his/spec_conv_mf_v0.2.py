@@ -2,7 +2,7 @@
 """
 Spectral Convolution with Matrix Factorization
 Author: Jason.Fang
-Update time: 16/07/2021
+Update time: 15/07/2021
 """
 
 import math
@@ -21,33 +21,49 @@ class SpecConv(nn.Module):
         self.mf_k = mf_k #latent factors
         self._make_params()
 
+    def _l2normalize(self, x, eps=1e-12):
+        return x / (x.norm() + eps)
+
     def _make_params(self):
-        #spectral weight
         w = getattr(self.module, self.name)
+
+        #spectral weight
         height = w.data.shape[0]
         width = w.view(height, -1).data.shape[1]
 
         p = nn.Parameter(torch.empty(height, self.mf_k), requires_grad=True)
         q = nn.Parameter(torch.empty(self.mf_k, width), requires_grad=True)
-
-        nn.init.kaiming_normal_(p.data, mode='fan_out', nonlinearity='relu')
-        nn.init.kaiming_normal_(q.data, mode='fan_out', nonlinearity='relu')
+        p.data.normal_(0, 1)
+        q.data.normal_(0, 1)
 
         self.module.register_parameter(self.name + "_p", p)
         self.module.register_parameter(self.name + "_q", q)
 
     def _update_weight(self):
-        #get parameters
+        
         w = getattr(self.module, self.name)
         p = getattr(self.module, self.name + "_p")
         q = getattr(self.module, self.name + "_q")
-        #solve simga
-        _, s_p, v_p = torch.svd(p.cpu()) #the speed in cpu is faster than in gpu
-        u_q, s_q, _ = torch.svd(q.cpu())
-        sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
-        #rewrite weights
-        w = torch.mm(p,q).view_as(w)
-        w.data = w / sigma.expand_as(w) 
+
+        #p = self._l2normalize(p)
+        #q = self._l2normalize(q)
+        p_u, p_s, p_v = torch.svd(p.cpu()) #the speed in cpu is faster than in gpu
+        q_u, q_s, q_v = torch.svd(q.cpu())
+
+        #sigma = torch.max(torch.max(p_s),torch.max(q_s)).cuda()
+        #sigma = torch.max(p_s*q_s).cuda()
+        #sigma = torch.max(p_s * torch.diag(p_v.T*q_u) * q_s).cuda()
+        sigma = torch.diag_embed(p_s)*p_v*q_u*torch.diag_embed(q_s)
+        w = torch.mm(torch.mm(p_u, sigma), q_v.T)
+        sigma = torch.max(torch.diag(sigma))
+        #w = torch.mm(p,q).view_as(w)
+        #w.data = w / sigma.expand_as(w) #rewrite weights
+
+        #p = p / torch.max(p_s).expand_as(p).cuda()
+        #q = q / torch.max(q_s).expand_as(q).cuda()
+        #w.data = torch.mm(p,q).view_as(w)
+        _, w_s, _ =torch.svd(w.cpu())
+        print("W_Sigma=%.4f, P_Sigma=%.4f, Q_Sigma=%.4f, Diff_Sigma=%.4f"%(torch.max(w_s), torch.max(p_s), torch.max(q_s), torch.max(w_s)-sigma))
 
     def forward(self, *args):
         self._update_weight()

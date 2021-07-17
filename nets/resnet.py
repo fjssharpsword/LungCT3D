@@ -14,7 +14,7 @@ from torch import Tensor
 from typing import Type, Any, Callable, Union, List, Optional
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
 #define by myself
-#from nets.spec_conv import SpecConv
+#from nets.spec_conv_pi import SpecConv
 from nets.spec_conv_mf import SpecConv
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
