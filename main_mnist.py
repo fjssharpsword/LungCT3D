@@ -28,7 +28,7 @@ from nets.resnet import resnet18, wide_resnet50_2
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 50
-batch_size = 16#256
+batch_size = 256
 CKPT_PATH = '/data/pycode/LungCT3D/ckpt/resnet_mnist_best.pkl'
 def Train():
     print('********************load data********************')
@@ -66,7 +66,7 @@ def Train():
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
         print("=> Loaded well-trained checkpoint from: " + CKPT_PATH)
-    #model = nn.DataParallel(model).cuda()  # make model available multi GPU cores training    
+    model = nn.DataParallel(model).cuda()  # make model available multi GPU cores training    
     torch.backends.cudnn.benchmark = True  # improve train speed slightly
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
