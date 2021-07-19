@@ -1,8 +1,8 @@
 # encoding: utf-8
 """
-Training implementation for VIN-CXR dataset - Segmentation - 2D UNet
+Training implementation for LIDC-IDRI CT dataset - Segmentation - 3D UNet
 Author: Jason.Fang
-Update time: 12/07/2021
+Update time: 17/07/2021
 """
 import re
 import sys
@@ -27,24 +27,21 @@ import matplotlib.pyplot as plt
 from thop import profile
 #define by myself
 from utils.common import compute_AUCs, count_bytes
-from data_cxr2d.vincxr_dataloader import get_train_dataloader_VIN, get_test_dataloader_VIN
-from nets.unet2d import UNet
+from data_ct3d.lidc_idri_dataloader import get_train_dataloader, get_test_dataloader
+from nets.unet import UNet3D, DiceLoss
 
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
-CLASS_NAMES_Vin = ['No finding', 'Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
-        'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis']
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 MAX_EPOCHS = 20
-NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/unet2d_best.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/lidc_idri_unet3d_best.pkl'
 def Train():
     print('********************load data********************')
-    dataloader_train = get_train_dataloader_VIN(batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
+    dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = UNet(n_channels=3, n_classes=1)
+    model = UNet3D().cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -53,7 +50,7 @@ def Train():
     optimizer_model = optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
     lr_scheduler_model = lr_scheduler.StepLR(optimizer_model , step_size = 10, gamma = 1)
     torch.backends.cudnn.benchmark = True  # improve train speed slightly
-    criterion = nn.BCELoss() #nn.CrossEntropyLoss()
+    criterion = DiceLoss().cuda() #nn.CrossEntropyLoss().cuda()
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
@@ -65,9 +62,9 @@ def Train():
         model.train()  #set model to training mode
         train_loss = []
         with torch.autograd.enable_grad():
-            for batch_idx, (image, _, mask) in enumerate(dataloader_train):
-                var_image = torch.autograd.Variable(image).cuda()
-                var_mask = torch.autograd.Variable(mask).cuda()
+            for batch_idx, (ts_imgs, ts_masks, _) in enumerate(dataloader_train):
+                var_image = torch.autograd.Variable(ts_imgs).cuda()
+                var_mask = torch.autograd.Variable(ts_masks).cuda()
                 var_out = model(var_image)
                 loss_tensor = criterion(var_out, var_mask)
 
@@ -92,11 +89,11 @@ def Train():
 
 def Test():
     print('********************load data********************')
-    dataloader_test = get_test_dataloader_VIN(batch_size=32, shuffle=False, num_workers=8) #BATCH_SIZE
+    dataloader_test = get_test_dataloader(batch_size=8, shuffle=False, num_workers=8) #BATCH_SIZE
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = UNet(n_channels=3, n_classes=1).cuda()
+    model =UNet3D().cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -105,36 +102,33 @@ def Test():
     print('******************** load model succeed!********************')
 
     print('******* begin testing!*********')
-    gt = torch.FloatTensor()
-    pred = torch.FloatTensor()
     time_res = []
+    dice_coe = []
     with torch.autograd.no_grad():
-        for batch_idx, (image, _, mask) in enumerate(dataloader_test):
-            var_image = torch.autograd.Variable(image).cuda()
+        for batch_idx, (ts_imgs, ts_masks, _) in enumerate(dataloader_test):
+            var_image = torch.autograd.Variable(ts_imgs).cuda()
             start = time.time()
             var_out = model(var_image)
             end = time.time()
             time_res.append(end-start)
-            pred = torch.cat((pred, var_out.data.cpu()), 0) #prob
-            gt = torch.cat((gt, mask), 0)
+            pred = torch.where(var_out.cpu().data>0.5, 1, 0)
+            intersection = np.logical_and(ts_masks.numpy(), pred.numpy())
+            dice_coe_batch = 2. * intersection.sum() / (ts_masks.numpy().sum() + pred.numpy().sum())
+            dice_coe.append(dice_coe_batch)
             sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
             sys.stdout.flush()
-    #metric
-    gt_np = gt.numpy()
-    pred_np = np.where(pred.numpy() > 0.5, 1, 0)#pred.numpy()
-    # Compute Dice coefficient
-    intersection = np.logical_and(gt_np, pred_np)
-    dice_coe = 2. * intersection.sum() / (gt_np.sum() + pred_np.sum())
-    print("\r Dice coefficient = %.4f" % (dice_coe))
+    
     #model
-    print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
     param = sum(p.numel() for p in model.parameters() if p.requires_grad) #count params of model
     print("\r Params of model: {}".format(count_bytes(param)) )
     flops, _ = profile(model, inputs=(var_image,))
     print("FLOPs(Floating Point Operations) of model = {}".format(count_bytes(flops)) )
+    print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
+    #Compute Dice coefficient
+    print("\r Dice coefficient = %.4f" % (np.mean(dice_coe)))
 
 def main():
-    Train()
+    #Train()
     Test()
 
 if __name__ == '__main__':

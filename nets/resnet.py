@@ -190,7 +190,8 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        #self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.fc = nn.Sequential(nn.Linear(512 * block.expansion, num_classes), nn.Sigmoid())
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -269,6 +270,7 @@ def _resnet(
     if pretrained:
         state_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
         model.load_state_dict(state_dict)#strict=False
+    #modify the output layer
     #fc_features = model.fc.in_features 
     #model.fc = nn.Linear(fc_features, out_num_classes)
     #model.fc = nn.Sequential(nn.Linear(fc_features, out_num_classes), nn.Sigmoid())
@@ -388,7 +390,7 @@ def wide_resnet101_2(pretrained: bool = False, progress: bool = True, **kwargs: 
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 1, 128, 128).cuda()
-    model = resnet18(pretrained=False, num_classes=10).cuda()
+    x =  torch.rand(2, 3, 256, 256).cuda()
+    model = resnet18(pretrained=False, num_classes=15).cuda()
     out = model(x)
     print(out.shape)

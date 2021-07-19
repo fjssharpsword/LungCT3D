@@ -2,7 +2,7 @@
 """
 Training implementation for VIN-CXR dataset - Classificaiton - 2D Resnet
 Author: Jason.Fang
-Update time: 10/07/2021
+Update time: 17/07/2021
 """
 import re
 import sys
@@ -28,7 +28,7 @@ from thop import profile
 #define by myself
 from utils.common import compute_AUCs, count_bytes
 from data_cxr2d.vincxr_dataloader import get_train_dataloader_VIN, get_test_dataloader_VIN
-from nets.resnet2d import bayes_resnet18
+from nets.resnet import resnet18
 
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
@@ -37,14 +37,14 @@ CLASS_NAMES_Vin = ['No finding', 'Aortic enlargement', 'Atelectasis', 'Calcifica
 BATCH_SIZE = 256
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/resnet2d_best.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_best_conv.pkl'
 def Train():
     print('********************load data********************')
     dataloader_train = get_train_dataloader_VIN(batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = bayes_resnet18(num_classes=NUM_CLASSES)
+    model = resnet18(pretrained=False, num_classes=NUM_CLASSES).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -96,7 +96,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = bayes_resnet18(num_classes=NUM_CLASSES).cuda()
+    model = resnet18(pretrained=False, num_classes=NUM_CLASSES).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -119,6 +119,13 @@ def Test():
             gt = torch.cat((gt, label), 0)
             sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
             sys.stdout.flush()
+    
+    #model
+    param = sum(p.numel() for p in model.parameters() if p.requires_grad) #count params of model
+    print("\r Params of model: {}".format(count_bytes(param)) )
+    flops, _ = profile(model, inputs=(var_image,))
+    print("FLOPs(Floating Point Operations) of model = {}".format(count_bytes(flops)) )
+    print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
     #metric
     AUROCs = []
     gt_np = gt.numpy()
@@ -128,12 +135,6 @@ def Test():
         AUROCs.append(auc)
         print('The AUROC of {} is {:.4f}'.format(CLASS_NAMES_Vin[i], auc))
     print("\r Average AUROC = %.4f" % (np.mean(AUROCs)))
-    #model
-    print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
-    param = sum(p.numel() for p in model.parameters() if p.requires_grad) #count params of model
-    print("\r Params of model: {}".format(count_bytes(param)) )
-    flops, _ = profile(model, inputs=(var_image,))
-    print("FLOPs(Floating Point Operations) of model = {}".format(count_bytes(flops)) )
 
 def main():
     Train()

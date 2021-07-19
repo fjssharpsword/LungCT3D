@@ -14,7 +14,8 @@ from torch import Tensor
 from typing import Any, List, Tuple
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
 #define by myself
-from nets.spec_conv import SpecConv
+#from nets.spec_conv_pi import SpecConv
+from nets.spec_conv_mf import SpecConv
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/densenet.py
 
@@ -43,8 +44,8 @@ class _DenseLayer(nn.Module):
         self.add_module('relu1', nn.ReLU(inplace=True))
 
         self.conv1: nn.Conv2d
-        #self.add_module('conv1', nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False))
-        self.add_module('conv1', SpecConv(nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)))
+        self.add_module('conv1', nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False))
+        #self.add_module('conv1', SpecConv(nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)))
 
         self.norm2: nn.BatchNorm2d
         self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate))
@@ -52,8 +53,8 @@ class _DenseLayer(nn.Module):
         self.add_module('relu2', nn.ReLU(inplace=True))
 
         self.conv2: nn.Conv2d
-        #self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False))
-        self.add_module('conv2', SpecConv(nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)))
+        self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False))
+        #self.add_module('conv2', SpecConv(nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)))
 
         self.drop_rate = float(drop_rate)
         self.memory_efficient = memory_efficient
@@ -179,7 +180,8 @@ class DenseNet(nn.Module):
 
         # First convolution
         self.features = nn.Sequential(OrderedDict([
-            ('conv0', nn.Conv2d(3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)), #adjust input channels
+            #('conv0', nn.Conv2d(3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)), #adjust input channels
+            ('conv0', nn.Conv2d(1, num_init_features, kernel_size=7, stride=1, padding=3, bias=False)),
             ('norm0', nn.BatchNorm2d(num_init_features)),
             ('relu0', nn.ReLU(inplace=True)),
             ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),

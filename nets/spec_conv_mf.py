@@ -21,6 +21,9 @@ class SpecConv(nn.Module):
         self.mf_k = mf_k #latent factors
         self._make_params()
 
+    def _l2normalize(self, x, eps=1e-12):
+        return x / (x.norm() + eps)
+
     def _make_params(self):
         #spectral weight
         w = getattr(self.module, self.name)
@@ -48,6 +51,7 @@ class SpecConv(nn.Module):
         #rewrite weights
         w = torch.mm(p,q).view_as(w)
         w.data = w / sigma.expand_as(w) 
+        #w.data = self._l2normalize(w.data)
 
     def forward(self, *args):
         self._update_weight()
