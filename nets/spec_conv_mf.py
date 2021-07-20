@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.modules.utils import _single, _pair, _triple
 
 class SpecConv(nn.Module):
-    def __init__(self, module, name='weight', mf_k = 10):
+    def __init__(self, module, name='weight', mf_k = 5):#k =[1, 5, 10]
         super(SpecConv, self).__init__()
         self.module = module
         self.name = name
@@ -48,6 +48,7 @@ class SpecConv(nn.Module):
         _, s_p, v_p = torch.svd(p.cpu()) #the speed in cpu is faster than in gpu
         u_q, s_q, _ = torch.svd(q.cpu())
         sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
+        #sigma = torch.mean(s_p * torch.diag(v_p*u_q) * s_q).cuda()
         #rewrite weights
         w = torch.mm(p,q).view_as(w)
         w.data = w / sigma.expand_as(w) 
@@ -62,6 +63,6 @@ if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 3, 32, 32).cuda()
     #sconv = SpecUnConv(nn.Conv2d(3, 16, kernel_size=3, padding=(3 - 1) // 2, stride=1, bias=False)).cuda()
-    sconv = SpecConv(nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)).cuda()
+    sconv = SpecConv(nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False), mf_k = 10).cuda()
     out = sconv(x)
     print(out.shape)

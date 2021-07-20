@@ -30,7 +30,7 @@ from nets.densenet import densenet121
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 50
 batch_size = 256
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_conv.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_conv_mf_resnet_k5.pkl'
 def Train():
     print('********************load data********************')
     root = '/data/tmpexec/mnist'
@@ -42,7 +42,7 @@ def Train():
     test_set = dset.MNIST(root=root, train=False, transform=trans, download=True)
 
     #split train set and val set
-    #sample_size = int(1.0 * len(train_set)) #[1.0, 0.5, 0.1]
+    #sample_size = int(1.0 * len(train_set)/6) #[1.0, 1/6]
     #train_set, _ = torch.utils.data.random_split(train_set, [sample_size, len(train_set) - sample_size])
     train_size = int(0.8 * len(train_set))#8:2
     val_size = len(train_set) - train_size
@@ -62,7 +62,7 @@ def Train():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = densenet121(pretrained=False, num_classes=10).cuda()
+    model = resnet18(pretrained=False, num_classes=10).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -153,7 +153,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = densenet121(pretrained=False, num_classes=10).cuda()
+    model = resnet18(pretrained=False, num_classes=10).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False

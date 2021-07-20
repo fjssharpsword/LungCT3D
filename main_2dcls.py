@@ -29,6 +29,7 @@ from thop import profile
 from utils.common import compute_AUCs, count_bytes
 from data_cxr2d.vincxr_dataloader import get_train_dataloader_VIN, get_test_dataloader_VIN
 from nets.resnet import resnet18
+from nets.densenet import densenet121
 
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
@@ -37,7 +38,7 @@ CLASS_NAMES_Vin = ['No finding', 'Aortic enlargement', 'Atelectasis', 'Calcifica
 BATCH_SIZE = 256
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_best_conv.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_cls_conv_pi_resnet.pkl'
 def Train():
     print('********************load data********************')
     dataloader_train = get_train_dataloader_VIN(batch_size=BATCH_SIZE, shuffle=True, num_workers=8)
