@@ -38,7 +38,7 @@ CLASS_NAMES_Vin = ['No finding', 'Aortic enlargement', 'Atelectasis', 'Calcifica
 BATCH_SIZE = 256
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_cls_conv_pi_resnet.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_cls_resnet_conv_mf_k1.pkl'
 def Train():
     print('********************load data********************')
     dataloader_train = get_train_dataloader_VIN(batch_size=BATCH_SIZE, shuffle=True, num_workers=8)

@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.modules.utils import _single, _pair, _triple
 
 class SpecConv(nn.Module):
-    def __init__(self, module, name='weight', mf_k = 5):#k =[1, 5, 10]
+    def __init__(self, module, name='weight', mf_k = 1):#k =[1, 5, 10]
         super(SpecConv, self).__init__()
         self.module = module
         self.name = name

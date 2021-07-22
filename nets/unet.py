@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 #define by myself
+#from nets.spec_conv_pi import SpecConv
 from nets.spec_conv_mf import SpecConv
 
 def normalization(planes, norm='gn'):
