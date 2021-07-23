@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.modules.utils import _single, _pair, _triple
 
 class SpecConv(nn.Module):
-    def __init__(self, module, name='weight', mf_k = 1):#k =[1, 5, 10]
+    def __init__(self, module, name='weight', mf_k = 10):#k =[1, 5, 10]
         super(SpecConv, self).__init__()
         self.module = module
         self.name = name
@@ -45,14 +45,12 @@ class SpecConv(nn.Module):
         p = getattr(self.module, self.name + "_p")
         q = getattr(self.module, self.name + "_q")
         #solve simga
-        _, s_p, v_p = torch.svd(p.cpu()) #the speed in cpu is faster than in gpu
-        u_q, s_q, _ = torch.svd(q.cpu())
-        sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
-        #sigma = torch.mean(s_p * torch.diag(v_p*u_q) * s_q).cuda()
+        #_, s_p, v_p = torch.svd(p.cpu()) #the speed in cpu is faster than in gpu
+        #u_q, s_q, _ = torch.svd(q.cpu())
+        #sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
         #rewrite weights
-        w = torch.mm(p,q).view_as(w)
-        w.data = w / sigma.expand_as(w) 
-        #w.data = self._l2normalize(w.data)
+        w.data = torch.mm(p,q).view_as(w)
+        #w.data = w / sigma.expand_as(w) 
 
     def forward(self, *args):
         self._update_weight()

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on 27/04/2021
-@author: Jason.Fang (fangjiansheng@cvte.com)
+@author: Jason.Fang
 """
 
 import glob

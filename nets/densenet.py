@@ -15,7 +15,7 @@ from typing import Any, List, Tuple
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
 #define by myself
 #from nets.spec_conv_pi import SpecConv
-#from nets.spec_conv_mf import SpecConv
+from nets.spec_conv_mf import SpecConv
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/densenet.py
 
@@ -44,8 +44,8 @@ class _DenseLayer(nn.Module):
         self.add_module('relu1', nn.ReLU(inplace=True))
 
         self.conv1: nn.Conv2d
-        self.add_module('conv1', nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False))
-        #self.add_module('conv1', SpecConv(nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)))
+        #self.add_module('conv1', nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False))
+        self.add_module('conv1', SpecConv(nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)))
 
         self.norm2: nn.BatchNorm2d
         self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate))
@@ -53,8 +53,8 @@ class _DenseLayer(nn.Module):
         self.add_module('relu2', nn.ReLU(inplace=True))
 
         self.conv2: nn.Conv2d
-        self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False))
-        #self.add_module('conv2', SpecConv(nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)))
+        #self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False))
+        self.add_module('conv2', SpecConv(nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)))
 
         self.drop_rate = float(drop_rate)
         self.memory_efficient = memory_efficient
