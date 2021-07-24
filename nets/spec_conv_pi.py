@@ -54,8 +54,9 @@ class SpecConv(nn.Module):
         #sigma = torch.mean(S) #complexity
         
         #del self.module._parameters[self.name]
-        del self.module.weight #rewrite the weights
-        setattr(self.module, self.name, w / sigma.expand_as(w))
+        #del self.module.weight #rewrite the weights
+        #setattr(self.module, self.name, w / sigma.expand_as(w))
+        w.data = w / sigma.expand_as(w)
 
     def forward(self, *args):
         self._update_weight()

@@ -32,7 +32,7 @@ CLASS_NAMES_Vin = ['Average', 'Aortic enlargement', 'Atelectasis', 'Calcificatio
 BATCH_SIZE = 8
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_det_conv_resnet.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_conv_pi.pkl'
 
 def Train(data_loader_box_train):
     print('********************load model********************')
@@ -120,7 +120,7 @@ def Test(data_loader_box_test):
                         if gt_lbl[m] == pred_lbl[n]:
                             iou = compute_iou(gt_box[m], pred_box[n])
                             if iou_max < iou: iou_max =  iou
-                    if iou_max > 0.5: #hit
+                    if iou_max > 0.4: #hit
                         mAP[0].append(1)
                         mAP[gt_lbl[m].item()].append(1)
                     else:
@@ -137,7 +137,7 @@ def main():
     print('********************load data********************')
     data_loader_box_train,  data_loader_box_test= get_box_dataloader_VIN(batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
     print('********************load data succeed!********************')
-    #Train(data_loader_box_train)
+    Train(data_loader_box_train)
     Test(data_loader_box_test)
 
 if __name__ == '__main__':

@@ -69,3 +69,19 @@ def compute_iou(rec1, rec2):
     else:
         intersect = (right_line - left_line) * (bottom_line - top_line)
         return (intersect / (sum_area - intersect))*1.0
+
+
+def dice_coeff(input, target):
+
+    N = target.size(0)
+    smooth = 1
+    
+    input_flat = input.view(N, -1)
+    target_flat = target.view(N, -1)
+    
+    intersection = input_flat * target_flat
+    
+    loss = 2 * (intersection.sum(1) + smooth) / (input_flat.sum(1) + target_flat.sum(1) + smooth)
+    dice = loss.sum() / N
+
+    return dice
