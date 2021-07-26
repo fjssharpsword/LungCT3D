@@ -180,8 +180,8 @@ class DenseNet(nn.Module):
 
         # First convolution
         self.features = nn.Sequential(OrderedDict([
-            #('conv0', nn.Conv2d(3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)), #vin-cxr
-            ('conv0', nn.Conv2d(1, num_init_features, kernel_size=7, stride=1, padding=3, bias=False)), #mnist
+            ('conv0', nn.Conv2d(3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)), #vin-cxr
+            #('conv0', nn.Conv2d(1, num_init_features, kernel_size=7, stride=1, padding=3, bias=False)), #mnist
             ('norm0', nn.BatchNorm2d(num_init_features)),
             ('relu0', nn.ReLU(inplace=True)),
             ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
@@ -321,7 +321,7 @@ def densenet201(pretrained: bool = False, progress: bool = True, **kwargs: Any) 
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 3, 32, 32).cuda()
+    x =  torch.rand(2, 3, 256, 256).cuda()
     model = densenet121(pretrained=False, num_classes=10).cuda()
     out = model(x)
     print(out.shape)

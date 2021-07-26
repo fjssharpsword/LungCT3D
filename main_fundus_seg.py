@@ -35,7 +35,7 @@ from nets.unet_2d import UNet, DiceLoss
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 BATCH_SIZE = 32
 MAX_EPOCHS = 100
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet2d_conv_mf8.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet2d_conv_pi32.pkl'
 def Train():
     print('********************load data********************')
     dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
@@ -104,7 +104,7 @@ def Train():
 
         time_elapsed = time.time() - since
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
-        log_writer.add_scalars('FundusDiceLoss/UNetConvMF8', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
+        log_writer.add_scalars('FundusDiceLoss/UNetConvPI32', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
     print("\r Dice of testset = %.4f" % (1-loss_min))
     log_writer.close() #shut up the tensorboard
 

@@ -26,20 +26,20 @@ from nets.resnet import resnet18
 from nets.densenet import densenet121
 
 #config
-os.environ['CUDA_VISIBLE_DEVICES'] = "7"
+os.environ['CUDA_VISIBLE_DEVICES'] = "5"
 CLASS_NAMES_Vin = ['Average', 'Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
         'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis']
-BATCH_SIZE = 8
+BATCH_SIZE = 2#8
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_conv_pi.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_densenet_conv_mf.pkl'
 
 def Train(data_loader_box_train):
     print('********************load model********************')
-    resnet = resnet18(pretrained=False, num_classes=NUM_CLASSES).cuda()
-    backbone = nn.Sequential(resnet.conv1, resnet.bn1,resnet.relu, resnet.maxpool,resnet.layer1,resnet.layer2,resnet.layer3,resnet.layer4)
-    #backbone = densenet121(pretrained=False, num_classes=NUM_CLASSES).features.cuda()
-    backbone.out_channels = 512
+    #resnet = resnet18(pretrained=False, num_classes=NUM_CLASSES).cuda()
+    #backbone = nn.Sequential(resnet.conv1, resnet.bn1,resnet.relu, resnet.maxpool,resnet.layer1,resnet.layer2,resnet.layer3,resnet.layer4)
+    backbone = densenet121(pretrained=False, num_classes=NUM_CLASSES).features.cuda()
+    backbone.out_channels = 1024 #resnet18=512,  densenet121=1024
     anchor_generator = AnchorGenerator(sizes=((32, 64, 128),),aspect_ratios=((0.5, 1.0, 2.0),))
     roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'],output_size=7,sampling_ratio=2)
     model = FasterRCNN(backbone, num_classes=NUM_CLASSES, rpn_anchor_generator=anchor_generator, box_roi_pool=roi_pooler).cuda()
@@ -87,9 +87,10 @@ def Train(data_loader_box_train):
 
 def Test(data_loader_box_test):
     print('********************load model********************')
-    resnet = resnet18(pretrained=False, num_classes=NUM_CLASSES).cuda()
-    backbone = nn.Sequential(resnet.conv1, resnet.bn1,resnet.relu, resnet.maxpool,resnet.layer1,resnet.layer2,resnet.layer3,resnet.layer4)
-    backbone.out_channels = 512
+    #resnet = resnet18(pretrained=False, num_classes=NUM_CLASSES).cuda()
+    #backbone = nn.Sequential(resnet.conv1, resnet.bn1,resnet.relu, resnet.maxpool,resnet.layer1,resnet.layer2,resnet.layer3,resnet.layer4)
+    backbone = densenet121(pretrained=False, num_classes=NUM_CLASSES).features.cuda()
+    backbone.out_channels = 1024 #resnet18=512,  densenet121=1024
     anchor_generator = AnchorGenerator(sizes=((32, 64, 128),),aspect_ratios=((0.5, 1.0, 2.0),))
     roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'],output_size=7,sampling_ratio=2)
     model = FasterRCNN(backbone, num_classes=NUM_CLASSES, rpn_anchor_generator=anchor_generator, box_roi_pool=roi_pooler).cuda()
