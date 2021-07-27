@@ -30,8 +30,8 @@ class WeightNormalization(nn.Module):
     def _update_weight(self):
         #get parameters
         w = getattr(self.module, self.name)
-        #w.data = self._l2normalize(w)
-        w.data = self._minmaxscaler(w)
+        w.data = self._l2normalize(w)
+        #w.data = self._minmaxscaler(w)
 
     def forward(self, *args):
         self._update_weight()

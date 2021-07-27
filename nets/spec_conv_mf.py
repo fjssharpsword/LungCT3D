@@ -61,6 +61,6 @@ if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 3, 32, 32).cuda()
     #sconv = SpecUnConv(nn.Conv2d(3, 16, kernel_size=3, padding=(3 - 1) // 2, stride=1, bias=False)).cuda()
-    sconv = SpecConv(nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False), mf_k = 10).cuda()
+    sconv = SpecConv(nn.Conv2d(2, 16, kernel_size=3, stride=1, padding=1, bias=False), mf_k = 10).cuda()
     out = sconv(x)
     print(out.shape)

@@ -30,7 +30,7 @@ from nets.densenet import densenet121
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 50
 batch_size = 256
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_conv_mf_densenet_k1.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_densenet_conv.pkl'
 def Train():
     print('********************load data********************')
     root = '/data/tmpexec/mnist'
