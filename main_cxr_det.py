@@ -30,17 +30,17 @@ from nets.resnet import resnet18
 from nets.densenet import densenet121
 
 #config
-os.environ['CUDA_VISIBLE_DEVICES'] = "7"
+os.environ['CUDA_VISIBLE_DEVICES'] = "6"
 CLASS_NAMES_Vin = ['Average', 'Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
         'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis']
 BACKBONE_PARAMS = ['4.0.conv1.weight', '4.0.conv1.module.weight', '4.0.conv1.module.weight_p', '4.0.conv1.module.weight_q',\
                    '5.0.conv1.weight','5.0.conv1.module.weight', '5.0.conv1.module.weight_p', '5.0.conv1.module.weight_q', \
                   '6.0.conv1.weight','6.0.conv1.module.weight', '6.0.conv1.module.weight_p', '6.0.conv1.module.weight_q', \
                   '7.0.conv1.weight','7.0.conv1.module.weight', '7.0.conv1.module.weight_p', '7.0.conv1.module.weight_q' ]
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_conv_mf_1.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_conv.pkl'
 
 def Train(data_loader_box_train):
     print('********************load model********************')
@@ -63,7 +63,7 @@ def Train(data_loader_box_train):
     print('********************load model succeed!********************')
 
     print('********************begin training!********************')
-    log_writer = SummaryWriter('/data/tmpexec/tensorboard-log') #--port 10002, start tensorboard
+    #log_writer = SummaryWriter('/data/tmpexec/tensorboard-log') #--port 10002, start tensorboard
     loss_min = float('inf')
     for epoch in range(MAX_EPOCHS):
         since = time.time()
@@ -92,12 +92,12 @@ def Train(data_loader_box_train):
             print(' Epoch: {} model has been already save!'.format(epoch+1))
 
         #print the histogram
-        if epoch % 5 == 0:
-            for name, param in backbone.named_parameters():
-                if name in BACKBONE_PARAMS:
-                    log_writer.add_histogram(name + '_data', param.clone().cpu().data.numpy(), epoch)
-                    if param.grad is not None: #leaf node in the graph retain gradient
-                        log_writer.add_histogram(name + '_grad', param.grad, epoch)
+        #if epoch % 5 == 0:
+        #    for name, param in backbone.named_parameters():
+        #        if name in BACKBONE_PARAMS:
+        #            log_writer.add_histogram(name + '_data', param.clone().cpu().data.numpy(), epoch)
+        #            if param.grad is not None: #leaf node in the graph retain gradient
+         #               log_writer.add_histogram(name + '_grad', param.grad, epoch)
         #param = sum(p.numel() for p in model.parameters() if p.requires_grad) #count params of model
         #print("\r Params of model: {}".format(count_bytes(param)) )
         #flops, _ = profile(model, inputs=(images,))
@@ -105,7 +105,7 @@ def Train(data_loader_box_train):
 
         time_elapsed = time.time() - since
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
-    log_writer.close() #shut up the tensorboard
+    #log_writer.close() #shut up the tensorboard
 
 def Test(data_loader_box_test):
 

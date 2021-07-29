@@ -33,13 +33,17 @@ from nets.unet_2d import UNet, DiceLoss
 
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
-BATCH_SIZE = 32
-MAX_EPOCHS = 100
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet2d_conv_pi32.pkl'
+MODEL_PARAMS = ['module.down1.maxpool_conv.1.double_conv.0.module.weight', 'module.down1.maxpool_conv.1.double_conv.0.module.weight_p', 'module.down1.maxpool_conv.1.double_conv.0.module.weight_q',\
+                'module.down4.maxpool_conv.1.double_conv.0.module.weight', 'module.down4.maxpool_conv.1.double_conv.3.module.weight_p', 'module.down4.maxpool_conv.1.double_conv.3.module.weight_q',\
+                'module.up1.conv.double_conv.0.module.weight', 'module.up1.conv.double_conv.0.module.weight_p', 'module.up1.conv.double_conv.0.module.weight_q',\
+                'module.up4.conv.double_conv.3.module.weight', 'module.up4.conv.double_conv.3.module.weight_p', 'module.up4.conv.double_conv.3.module.weight_q']
+BATCH_SIZE = 16
+MAX_EPOCHS = 200
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet2d_conv_mf.pkl'
 def Train():
     print('********************load data********************')
-    dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
-    dataloader_test = get_test_dataloader(batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
+    dataloader_test = get_test_dataloader(batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
     print('********************load data succeed!********************')
 
     print('********************load model********************')
@@ -104,9 +108,18 @@ def Train():
 
         time_elapsed = time.time() - since
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
-        log_writer.add_scalars('FundusDiceLoss/UNetConvPI32', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
-    print("\r Dice of testset = %.4f" % (1-loss_min))
+
+        #print the weight, grad and loss
+        log_writer.add_scalars('FundusDiceLoss/UNetConvMF', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
+        if epoch % 40 == 0:
+            for name, param in model.named_parameters():
+                #print(name,'---', param.size())
+                if name in MODEL_PARAMS:
+                    log_writer.add_histogram(name + '_data', param.clone().cpu().data.numpy(), epoch)
+                    if param.grad is not None: #leaf node in the graph retain gradient
+                        log_writer.add_histogram(name + '_grad', param.grad, epoch)
     log_writer.close() #shut up the tensorboard
+    print("\r Dice of testset = %.4f" % (1-loss_min))
 
 def Test():
     print('********************load data********************')
@@ -121,6 +134,12 @@ def Test():
         print("=> Loaded well-trained segmentation model checkpoint of Vin-CXR dataset: "+CKPT_PATH)
     model.eval()
     criterion = DiceLoss().cuda()
+    #log_writer = SummaryWriter('/data/tmpexec/tensorboard-log') #--port 10002, start tensorboard
+    #for name, param in model.named_parameters():
+    #    print(name,'---', param.size())
+        #if name in MODEL_PARAMS:
+            #log_writer.add_histogram('test_conv_' + name + '_data', param.clone().cpu().data.numpy())
+    #log_writer.close() #shut up the tensorboard
     print('******************** load model succeed!********************')
 
     print('******* begin testing!*********')
@@ -138,7 +157,6 @@ def Test():
             dice_coe.append(criterion(pred, mask).item())
             sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
             sys.stdout.flush()
-    
     #model
     param = sum(p.numel() for p in model.parameters() if p.requires_grad) #count params of model
     print("\r Params of model: {}".format(count_bytes(param)) )

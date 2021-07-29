@@ -2,7 +2,7 @@
 """
 Spectral Convolution with Matrix Factorization
 Author: Jason.Fang
-Update time: 16/07/2021
+Update time: 28/07/2021
 """
 
 import math
@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torch.nn.modules.utils import _single, _pair, _triple
 
 class SpecConv(nn.Module):
-    def __init__(self, module, name='weight', mf_k = 1):#k =[1, 5, 10]
+    def __init__(self, module, name='weight', mf_k = 10):#k =[1, 5, 10]
         super(SpecConv, self).__init__()
         self.module = module
         self.name = name
@@ -38,19 +38,22 @@ class SpecConv(nn.Module):
 
         self.module.register_parameter(self.name + "_p", p)
         self.module.register_parameter(self.name + "_q", q)
+        #del self.module._parameters[self.name]
 
     def _update_weight(self):
         #get parameters
         w = getattr(self.module, self.name)
         p = getattr(self.module, self.name + "_p")
         q = getattr(self.module, self.name + "_q")
-        #solve simga
+        #solve spectral norm
         _, s_p, v_p = torch.svd(p.cpu()) #the speed in cpu is faster than in gpu
         u_q, s_q, _ = torch.svd(q.cpu())
         sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
         #rewrite weights
-        w = torch.mm(p,q).view_as(w)
-        w.data = w / sigma.expand_as(w) 
+        w_hat= torch.mm(p,q).view_as(w)
+        del self.module.weight
+        setattr(self.module, self.name, w_hat / sigma.expand_as(w))
+        #w.data = w_hat / sigma.expand_as(w) 
 
     def forward(self, *args):
         self._update_weight()
@@ -61,6 +64,6 @@ if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 3, 32, 32).cuda()
     #sconv = SpecUnConv(nn.Conv2d(3, 16, kernel_size=3, padding=(3 - 1) // 2, stride=1, bias=False)).cuda()
-    sconv = SpecConv(nn.Conv2d(2, 16, kernel_size=3, stride=1, padding=1, bias=False), mf_k = 10).cuda()
+    sconv = SpecConv(nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False), mf_k = 10).cuda()
     out = sconv(x)
     print(out.shape)

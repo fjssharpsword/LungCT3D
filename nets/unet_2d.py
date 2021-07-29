@@ -8,8 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 #define by myself
-from nets.spec_conv_pi import SpecConv
-#from nets.spec_conv_mf import SpecConv
+#from nets.spec_conv_pi import SpecConv
+from nets.spec_conv_mf import SpecConv
 
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
