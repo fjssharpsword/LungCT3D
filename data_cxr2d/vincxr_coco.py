@@ -144,11 +144,18 @@ def get_box_dataloader_VIN(batch_size, shuffle, num_workers):
     train_size = int(0.8 * len(dataset_box))#8:2
     test_size = len(dataset_box) - train_size
     train_dataset, test_dataset = torch.utils.data.random_split(dataset_box, [train_size, test_size])
-
     data_loader_box_train = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, collate_fn=collate_fn)
     data_loader_box_test = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, collate_fn=collate_fn)
 
     return data_loader_box_train, data_loader_box_test
+
+def get_box_dataloader_VIN_CVTE(batch_size, shuffle, num_workers):
+    vin_csv_file = '/data/fjsdata/Vin-CXR/train.csv'
+    vin_image_dir = '/data/fjsdata/Vin-CXR/train_val_jpg/'
+    dataset_box = DatasetGenerator(path_to_img_dir=vin_image_dir, path_to_dataset_file=vin_csv_file)
+    data_loader_box_train = DataLoader(dataset=dataset_box, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, pin_memory=True, collate_fn=collate_fn)
+
+    return data_loader_box_train
 
 if __name__ == "__main__":
 

@@ -2,7 +2,7 @@
 """
 Spectral Convolution with Matrix Factorization
 Author: Jason.Fang
-Update time: 29/07/2021
+Update time: 28/07/2021
 """
 
 import math
@@ -21,6 +21,9 @@ class SpecConv(nn.Module):
         self.mf_k = mf_k #latent factors
         self._make_params()
 
+    def _l2normalize(self, x, eps=1e-12):
+        return x / (x.norm() + eps)
+
     def _make_params(self):
         #spectral weight
         w = getattr(self.module, self.name)
@@ -35,6 +38,7 @@ class SpecConv(nn.Module):
 
         self.module.register_parameter(self.name + "_p", p)
         self.module.register_parameter(self.name + "_q", q)
+        #del self.module._parameters[self.name]
 
     def _update_weight(self):
         #get parameters
@@ -44,11 +48,11 @@ class SpecConv(nn.Module):
         #solve spectral norm
         _, s_p, v_p = torch.svd(p.cpu()) #the speed in cpu is faster than in gpu
         u_q, s_q, _ = torch.svd(q.cpu())
-        #sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
-        sigma = torch.sum(torch.abs(s_p * torch.diag(v_p*u_q) * s_q)).cuda()
-        #approximate the weight
-        w = torch.mm(p,q).view_as(w)
+        sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
         #rewrite weights
+        w = torch.mm(p,q).view_as(w)
+        #del self.module.weight
+        #setattr(self.module, self.name, w / sigma.expand_as(w))
         w.data = w / sigma.expand_as(w) 
 
     def forward(self, *args):

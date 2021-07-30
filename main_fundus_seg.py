@@ -36,10 +36,11 @@ os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 MODEL_PARAMS = ['module.down1.maxpool_conv.1.double_conv.0.module.weight', 'module.down1.maxpool_conv.1.double_conv.0.module.weight_p', 'module.down1.maxpool_conv.1.double_conv.0.module.weight_q',\
                 'module.down4.maxpool_conv.1.double_conv.0.module.weight', 'module.down4.maxpool_conv.1.double_conv.3.module.weight_p', 'module.down4.maxpool_conv.1.double_conv.3.module.weight_q',\
                 'module.up1.conv.double_conv.0.module.weight', 'module.up1.conv.double_conv.0.module.weight_p', 'module.up1.conv.double_conv.0.module.weight_q',\
-                'module.up4.conv.double_conv.3.module.weight', 'module.up4.conv.double_conv.3.module.weight_p', 'module.up4.conv.double_conv.3.module.weight_q']
+                'module.up4.conv.double_conv.3.module.weight', 'module.up4.conv.double_conv.3.module.weight_p', 'module.up4.conv.double_conv.3.module.weight_q',\
+                'module.down1.maxpool_conv.1.double_conv.0.weight', 'module.down4.maxpool_conv.1.double_conv.1.weight','module.up1.conv.double_conv.0.weight', 'module.up4.conv.double_conv.1.weight']
 BATCH_SIZE = 16
 MAX_EPOCHS = 200
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet2d_conv_mf.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet2d_conv.pkl'
 def Train():
     print('********************load data********************')
     dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
@@ -110,14 +111,14 @@ def Train():
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
 
         #print the weight, grad and loss
-        log_writer.add_scalars('FundusDiceLoss/UNetConvMF', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
+        log_writer.add_scalars('FundusDiceLoss/UNetConv', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
         if epoch % 40 == 0:
             for name, param in model.named_parameters():
                 #print(name,'---', param.size())
                 if name in MODEL_PARAMS:
-                    log_writer.add_histogram(name + '_data', param.clone().cpu().data.numpy(), epoch)
+                    log_writer.add_histogram(name + '_data_conv', param.clone().cpu().data.numpy(), epoch)
                     if param.grad is not None: #leaf node in the graph retain gradient
-                        log_writer.add_histogram(name + '_grad', param.grad, epoch)
+                        log_writer.add_histogram(name + '_grad_conv', param.grad, epoch)
     log_writer.close() #shut up the tensorboard
     print("\r Dice of testset = %.4f" % (1-loss_min))
 
