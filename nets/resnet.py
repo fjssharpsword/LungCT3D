@@ -16,8 +16,9 @@ from torch.utils.model_zoo import load_url as load_state_dict_from_url
 #define by myself
 #from nets.conv_norm import WeightNormalization
 #from nets.spec_conv_pi import SpecConv
-from nets.spec_conv_mf import SpecConv
-
+#from nets.spec_conv_mf import SpecConv
+#from nets.spec_conv2d_pi import SpecConv2d
+from nets.spec_conv2d_mf import SpecConv2d
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -38,13 +39,17 @@ model_urls = {
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
     """3x3 convolution with padding"""
     #return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
-    return SpecConv(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
+    return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=3, stride=stride)
+
+    #return SpecConv(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
     #return WeightNormalization(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     """1x1 convolution"""
     #return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
-    return SpecConv(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
+    return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=1, stride=stride)
+
+    #return SpecConv(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
     #return WeightNormalization(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
 
 class BasicBlock(nn.Module):

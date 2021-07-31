@@ -267,7 +267,7 @@ def CVTETest():
                         ind = np.argmax(scores)
                         pred = torch.cat((pred, scores[ind].unsqueeze(0)), 0)
                     else:
-                        pred = torch.cat((pred, torch.FloatTensor([0.5])), 0)
+                        pred = torch.cat((pred, torch.FloatTensor([0])), 0)
                 else:#no findings
                     gt = torch.cat((gt, torch.FloatTensor([0])), 0)
                     scores = var_output[i]['scores'].cpu().data
@@ -275,7 +275,7 @@ def CVTETest():
                         ind = np.argmax(scores)
                         pred = torch.cat((pred, scores[ind].unsqueeze(0)), 0)
                     else:
-                        pred = torch.cat((pred, torch.FloatTensor([0.5])), 0)
+                        pred = torch.cat((pred, torch.FloatTensor([0])), 0)
                              
             sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
             sys.stdout.flush()

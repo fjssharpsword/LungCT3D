@@ -24,8 +24,8 @@ class SpecConv(nn.Module):
     def _make_params(self):
         #spectral weight
         w = getattr(self.module, self.name)
-        height = w.data.shape[0]
-        width = w.view(height, -1).data.shape[1]
+        height = w.shape[0]
+        width = w.view(height, -1).shape[1]
 
         p = nn.Parameter(torch.empty(height, self.mf_k), requires_grad=True)
         q = nn.Parameter(torch.empty(self.mf_k, width), requires_grad=True)
@@ -50,6 +50,8 @@ class SpecConv(nn.Module):
         w = torch.mm(p,q).view_as(w)
         #rewrite weights
         w.data = w / sigma.expand_as(w) 
+        #del self.module.weight
+        #setattr(self.module, self.name, w / sigma.expand_as(w))
 
     def forward(self, *args):
         self._update_weight()
