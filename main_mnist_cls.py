@@ -30,7 +30,7 @@ from nets.densenet import densenet121
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 50
 batch_size = 256
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_densenet_conv.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_densenet_wconv.pkl'
 def Train():
     print('********************load data********************')
     root = '/data/tmpexec/mnist'
@@ -178,6 +178,7 @@ def Test():
             correct_cnt += (pred_label == var_label.data).sum()
             sys.stdout.write('\r testing process: = {}'.format(batch_idx+1))
             sys.stdout.flush()
+            break
     
     param = sum(p.numel() for p in model.parameters() if p.requires_grad) #count params of model
     print("\r Params of model: {}".format(count_bytes(param)) )
@@ -190,7 +191,7 @@ def Test():
     print("\r ACC/CI = %.4f/%.4f" % (acc, ci) )
 
 def main():
-    Train()
+    #Train()
     Test()
 
 if __name__ == '__main__':

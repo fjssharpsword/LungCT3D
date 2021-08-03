@@ -2,7 +2,7 @@
 """
 Spectral convolution for 2D Resnet.
 Author: Jason.Fang
-Update time: 15/07/2021
+Update time: 31/07/2021
 """
 import sys
 import math
@@ -13,11 +13,11 @@ import torchvision
 from torch import Tensor
 from typing import Type, Any, Callable, Union, List, Optional
 from torch.utils.model_zoo import load_url as load_state_dict_from_url
+#https://github.com/pytorch/pytorch/blob/master/torch/nn/utils/weight_norm.py
+from torch.nn.utils import weight_norm 
+#https://github.com/pytorch/pytorch/blob/master/torch/nn/utils/spectral_norm.py
+from torch.nn.utils import spectral_norm
 #define by myself
-#from nets.conv_norm import WeightNormalization
-#from nets.spec_conv_pi import SpecConv
-#from nets.spec_conv_mf import SpecConv
-#from nets.spec_conv2d_pi import SpecConv2d
 from nets.spec_conv2d_mf import SpecConv2d
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
@@ -39,18 +39,16 @@ model_urls = {
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
     """3x3 convolution with padding"""
     #return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
+    #return weight_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
+    #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
     return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=3, stride=stride)
-
-    #return SpecConv(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
-    #return WeightNormalization(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     """1x1 convolution"""
     #return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    #return weight_norm(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
+    #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
     return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=1, stride=stride)
-
-    #return SpecConv(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
-    #return WeightNormalization(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
 
 class BasicBlock(nn.Module):
     expansion: int = 1
@@ -399,7 +397,7 @@ def wide_resnet101_2(pretrained: bool = False, progress: bool = True, **kwargs: 
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 3, 256, 256).cuda()
+    x =  torch.rand(2, 1, 32, 32).cuda()
     model = resnet18(pretrained=False, num_classes=15).cuda()
     out = model(x)
     print(out.shape)
