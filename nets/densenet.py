@@ -18,6 +18,7 @@ from torch.nn.utils import weight_norm
 #https://github.com/pytorch/pytorch/blob/master/torch/nn/utils/spectral_norm.py
 from torch.nn.utils import spectral_norm
 #define by myself
+from nets.conv_mf import TensorTrain
 from nets.spec_conv2d_mf import SpecConv2d
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/densenet.py
@@ -49,9 +50,9 @@ class _DenseLayer(nn.Module):
         self.conv1: nn.Conv2d
         #self.add_module('conv1', nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False))
         #self.add_module('conv1', weight_norm(nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)))
-        #self.add_module('conv1', spectral_norm(nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)))
-        self.add_module('conv1', SpecConv2d(in_channels=num_input_features, out_channels=bn_size * growth_rate, kernel_size=1, stride=1))
-        
+        #self.add_module('conv1', TensorTrain(in_channels=num_input_features, out_channels=bn_size * growth_rate, kernel_size=1, rank_scale=0.5, dimensions=2, stride=1, padding = 0, bias=False))
+        self.add_module('conv1', spectral_norm(nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False)))      
+        #self.add_module('conv1', SpecConv2d(in_channels=num_input_features, out_channels=bn_size * growth_rate, kernel_size=1, stride=1))
 
         self.norm2: nn.BatchNorm2d
         self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate))
@@ -61,8 +62,9 @@ class _DenseLayer(nn.Module):
         self.conv2: nn.Conv2d
         #self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False))
         #self.add_module('conv2', weight_norm(nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)))
-        #self.add_module('conv2', spectral_norm(nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)))
-        self.add_module('conv2',  SpecConv2d(in_channels=bn_size * growth_rate, out_channels=growth_rate, kernel_size=3, stride=1))
+        #self.add_module('conv2', TensorTrain(in_channels=bn_size * growth_rate, out_channels=growth_rate, kernel_size=3, rank_scale=0.5, dimensions=2, stride=1, padding = 1, bias=False))
+        self.add_module('conv2', spectral_norm(nn.Conv2d(bn_size * growth_rate, growth_rate, kernel_size=3, stride=1, padding=1, bias=False)))
+        #self.add_module('conv2', SpecConv2d(in_channels=bn_size * growth_rate, out_channels=growth_rate, kernel_size=3, stride=1))
         
 
         self.drop_rate = float(drop_rate)

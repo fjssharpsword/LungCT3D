@@ -17,7 +17,7 @@ class SpecConv2d(conv._ConvNd):
     r"""
     Applies Spectral Convolution
     """
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, mf_k=10): #[1,5,10]
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, mf_k=2): #[2,10,18]
         padding = (kernel_size - 1) // 2
         kernel_size = _pair(kernel_size)
         stride = _pair(stride)
@@ -72,6 +72,7 @@ class SpecConv2d(conv._ConvNd):
         #MF: solve spectral norm
         _, s_p, v_p = torch.svd(self.weight_p.cpu()) #the speed in cpu is faster than in gpu
         u_q, s_q, _ = torch.svd(self.weight_q.cpu())
+        #sigma = torch.max(s_p * torch.diag(v_p*u_q) * s_q).cuda()
         sigma = torch.sum(torch.abs(s_p * torch.diag(v_p*u_q) * s_q)).cuda()
 
         #PI: solve spectral norm
