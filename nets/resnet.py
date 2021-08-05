@@ -41,16 +41,16 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
     """3x3 convolution with padding"""
     #return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
     #return weight_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
-    #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
     #return TensorTrain(in_channels=in_planes, out_channels=out_planes, kernel_size=3, rank_scale=0.5, dimensions=2, stride=stride, padding =dilation, bias=False)
+    #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
     return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=3, stride=stride)
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     """1x1 convolution"""
     #return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
     #return weight_norm(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
-    #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
     #return TensorTrain(in_channels=in_planes, out_channels=out_planes, kernel_size=1, rank_scale=0.5, dimensions=2, stride=stride, padding = 0, bias=False)
+    #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
     return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=1, stride=stride)
 
 class BasicBlock(nn.Module):

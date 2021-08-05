@@ -28,7 +28,7 @@ class SpecConv2d(conv._ConvNd):
         super(SpecConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, False, _pair(0), groups, bias, 'zeros')
 
         #the right largest singular value of W of power iteration (PI)
-        #self.register_buffer('u', torch.Tensor(1, out_channels).normal_())
+        self.register_buffer('u', torch.Tensor(1, out_channels).normal_())
         #set projected matrices
         self._make_params(mf_k)
 
@@ -70,13 +70,13 @@ class SpecConv2d(conv._ConvNd):
         w_hat = torch.mm(self.weight_p, self.weight_q)
 
         #MF: solve spectral norm
-        _, s_p, v_p = torch.svd(self.weight_p.cpu()) #the speed in cpu is faster than in gpu
-        u_q, s_q, _ = torch.svd(self.weight_q.cpu())
-        sigma = torch.sum(torch.abs(s_p * torch.diag(v_p*u_q) * s_q)).cuda()
+        #_, s_p, v_p = torch.svd(self.weight_p.cpu()) #the speed in cpu is faster than in gpu
+        #u_q, s_q, _ = torch.svd(self.weight_q.cpu())
+        #sigma = torch.sum(torch.abs(s_p * torch.diag(v_p*u_q) * s_q)).cuda()
 
         #PI: solve spectral norm
-        #sigma, _u = self._power_iteration(w_hat, self.u)
-        #self.u.copy_(_u)
+        sigma, _u = self._power_iteration(w_hat, self.u)
+        self.u.copy_(_u)
 
         #rewrite the weight
         w_hat = w_hat.view_as(self.weight)
