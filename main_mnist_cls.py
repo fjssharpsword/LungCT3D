@@ -31,7 +31,7 @@ from nets.densenet import densenet121
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 max_epoches = 50
 batch_size = 256
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_resnet_sfconv10_e.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/mnist_densenet_sfconv10.pkl'
 def Train():
     print('********************load data********************')
     root = '/data/tmpexec/mnist'
@@ -63,7 +63,7 @@ def Train():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = resnet18(pretrained=False, num_classes=10).cuda()
+    model = densenet121(pretrained=False, num_classes=10).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -130,7 +130,7 @@ def Train():
 
         time_elapsed = time.time() - since
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
-        log_writer.add_scalars('CrossEntropyLoss/MNIST-ResNet', {'SFConv10_e':np.mean(loss_train)}, epoch+1)
+        log_writer.add_scalars('CrossEntropyLoss/MNIST-DenseNet', {'SFConv1':np.mean(loss_train)}, epoch+1)
     log_writer.close() #shut up the tensorboard
 
 def Test():
@@ -157,7 +157,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = resnet18(pretrained=False, num_classes=10).cuda()
+    model = densenet121(pretrained=False, num_classes=10).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -197,7 +197,7 @@ def Test():
     print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
 
 def main():
-    Train()
+    #Train()
     Test()
 
 if __name__ == '__main__':
