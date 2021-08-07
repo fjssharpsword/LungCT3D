@@ -63,7 +63,7 @@ def Train():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = densenet121(pretrained=False, num_classes=10).cuda()
+    model = resnet18(pretrained=False, num_classes=10).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -157,7 +157,7 @@ def Test():
     print('********************load data succeed!********************')
 
     print('********************load model********************')
-    model = densenet121(pretrained=False, num_classes=10).cuda()
+    model = resnet18(pretrained=False, num_classes=10).cuda()
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
         model.load_state_dict(checkpoint) #strict=False
@@ -197,7 +197,7 @@ def Test():
     print("FPS(Frams Per Second) of model = %.2f"% (1.0/(np.sum(time_res)/len(time_res))) )
 
 def main():
-    #Train()
+    Train()
     Test()
 
 if __name__ == '__main__':

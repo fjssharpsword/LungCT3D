@@ -46,6 +46,10 @@ class SpecConv2d(conv._ConvNd):
         self.register_parameter("weight_p", p)
         self.register_parameter("weight_q", q)
 
+        #for test
+        self.shape = self.weight.size()
+        del self.weight
+
     def _l2normalize(self, v, eps=1e-12):
         return v / (torch.norm(v) + eps)
     def _power_iteration(self, W, u=None, Ip=1):
@@ -69,28 +73,27 @@ class SpecConv2d(conv._ConvNd):
         #approximate the weight
         w_hat = torch.mm(self.weight_p, self.weight_q)
 
-        #MF: solve spectral norm
-        #_, s_p, v_p = torch.svd(self.weight_p.cpu()) #the speed in cpu is faster than in gpu
-        #u_q, s_q, _ = torch.svd(self.weight_q.cpu())
-        #sigma = torch.sum(torch.abs(s_p * torch.diag(v_p*u_q) * s_q)).cuda()
-
         #PI: solve spectral norm
+        #if self.training:
         sigma, _u = self._power_iteration(w_hat, self.u)
         self.u.copy_(_u)
-
+            
         #rewrite the weight
         w_hat = w_hat.view_as(self.weight)
         del self.weight
-        self.weight =  w_hat/sigma
+        self.weight = w_hat/sigma
+
         return self.weight
 
     def forward(self, input):
+        self.weight = torch.empty(self.shape) #for test
         return F.conv2d(input, self.W_, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 if __name__ == "__main__":
     #for debug  
     x =  torch.rand(2, 3, 16, 16).cuda()
     sconv = SpecConv2d(in_channels=3, out_channels=16, kernel_size=5, stride=2).cuda()
+    sconv.eval()
     out = sconv(x)
     print(out.shape)
 
