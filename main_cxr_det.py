@@ -30,7 +30,7 @@ from nets.resnet import resnet18
 from nets.densenet import densenet121
 
 #config
-os.environ['CUDA_VISIBLE_DEVICES'] = "5"
+os.environ['CUDA_VISIBLE_DEVICES'] = "7"
 CLASS_NAMES_Vin = ['Average', 'Aortic enlargement', 'Atelectasis', 'Calcification','Cardiomegaly', 'Consolidation', 'ILD', 'Infiltration', \
         'Lung Opacity', 'Nodule/Mass', 'Other lesion', 'Pleural effusion', 'Pleural thickening', 'Pneumothorax', 'Pulmonary fibrosis']
 BACKBONE_PARAMS = ['4.0.conv1.weight', '4.0.conv1.weight_v', '4.0.conv1.grouped.weight', '4.0.conv1.weight_orig', '4.0.conv1.weight_p', '4.0.conv1.weight_q',\
@@ -99,9 +99,9 @@ def Train():
         if (epoch+1) % 4 == 0:
             for name, param in backbone.named_parameters():
                 if name in BACKBONE_PARAMS:
-                    log_writer.add_histogram(name + '_data_sfconv', param.clone().cpu().data.numpy(), epoch)
+                    log_writer.add_histogram(name + '_data', param.clone().cpu().data.numpy(), epoch)
                     if param.grad is not None: #leaf node in the graph retain gradient
-                        log_writer.add_histogram(name + '_grad_sfconv', param.grad, epoch)
+                        log_writer.add_histogram(name + '_grad', param.grad, epoch)
 
         time_elapsed = time.time() - since
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
@@ -127,8 +127,17 @@ def Test():
         print("=> Loaded well-trained checkpoint from: " + CKPT_PATH)
     model.eval() 
 
-    #for name, param in backbone.named_parameters():
-    #    print(name,'---', param.size())
+    """
+    #plot the distribution of weights
+    log_writer = SummaryWriter('/data/tmpexec/tensorboard-log') #--port 10002, start tensorboard
+    epoch = 1
+    for name, param in backbone.named_parameters():
+        #print(name,'---', param.size())
+        if name in ['4.0.conv1.weight_orig','5.0.conv1.weight_orig','6.0.conv1.weight_orig','7.0.conv1.weight_orig']:
+            log_writer.add_histogram('sconv', param.clone().cpu().data.numpy(), epoch)
+            epoch = epoch + 1
+    log_writer.close() #shut up the tensorboard
+    """
     print('********************load model succeed!********************')
 
     print('******* begin testing!*********')
@@ -164,7 +173,7 @@ def Test():
         print('The mAP of {} is {:.4f}'.format(CLASS_NAMES_Vin[i], np.mean(mAP[i])))
 
 def main():
-    #Train()
+    Train()
     Test()
 
 if __name__ == '__main__':
