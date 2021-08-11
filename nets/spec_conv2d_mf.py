@@ -47,8 +47,8 @@ class SpecConv2d(conv._ConvNd):
         self.register_parameter("weight_q", q)
 
         #for test
-        self.shape = self.weight.size()
-        del self.weight
+        #self.shape = self.weight.size()
+        #del self.weight
 
     def _l2normalize(self, v, eps=1e-12):
         return v / (torch.norm(v) + eps)
@@ -86,7 +86,7 @@ class SpecConv2d(conv._ConvNd):
         return self.weight
 
     def forward(self, input):
-        self.weight = torch.empty(self.shape) #for test
+        #self.weight = torch.empty(self.shape) #for test
         return F.conv2d(input, self.W_, self.bias, self.stride, self.padding, self.dilation, self.groups)
 
 if __name__ == "__main__":

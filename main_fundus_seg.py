@@ -33,22 +33,13 @@ from nets.unet_2d import UNet, DiceLoss
 
 #config
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
-MODEL_PARAMS = ['module.down1.maxpool_conv.1.double_conv.0.module.weight', 'module.down1.maxpool_conv.1.double_conv.0.module.weight_p', 'module.down1.maxpool_conv.1.double_conv.0.module.weight_q',\
-                'module.down4.maxpool_conv.1.double_conv.0.module.weight', 'module.down4.maxpool_conv.1.double_conv.3.module.weight_p', 'module.down4.maxpool_conv.1.double_conv.3.module.weight_q',\
-                'module.up1.conv.double_conv.0.module.weight', 'module.up1.conv.double_conv.0.module.weight_p', 'module.up1.conv.double_conv.0.module.weight_q',\
-                'module.up4.conv.double_conv.3.module.weight', 'module.up4.conv.double_conv.3.module.weight_p', 'module.up4.conv.double_conv.3.module.weight_q',\
-                'module.down1.maxpool_conv.1.double_conv.0.weight', 'module.down4.maxpool_conv.1.double_conv.1.weight','module.up1.conv.double_conv.0.weight', 'module.up4.conv.double_conv.1.weight',\
-                'module.down1.maxpool_conv.1.double_conv.0.weight_p','module.down1.maxpool_conv.1.double_conv.0.weight_q',\
-                'module.down4.maxpool_conv.1.double_conv.3.weight_p','module.down4.maxpool_conv.1.double_conv.3.weight_q',\
-                'module.up1.conv.double_conv.0.weight_p','module.up1.conv.double_conv.0.weight_q',\
-                'module.up4.conv.double_conv.3.weight_p','module.up4.conv.double_conv.3.weight_q']
 BATCH_SIZE = 16
 MAX_EPOCHS = 200
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet2d_conv2d_mf.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet_sfconv.pkl'
 def Train():
     print('********************load data********************')
-    dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
-    dataloader_test = get_test_dataloader(batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+    dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=1)
+    dataloader_test = get_test_dataloader(batch_size=BATCH_SIZE, shuffle=False, num_workers=1)
     print('********************load data succeed!********************')
 
     print('********************load model********************')
@@ -114,21 +105,14 @@ def Train():
         time_elapsed = time.time() - since
         print('Training epoch: {} completed in {:.0f}m {:.0f}s'.format(epoch+1, time_elapsed // 60 , time_elapsed % 60))
 
-        #print the weight, grad and loss
-        log_writer.add_scalars('FundusDiceLoss/UNetConvMF_test1', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
-        if epoch % 5 == 0:
-            for name, param in model.named_parameters():
-                #print(name,'---', param.size())
-                if name in MODEL_PARAMS:
-                    log_writer.add_histogram(name + '_data_test1', param.clone().cpu().data.numpy(), epoch)
-                    if param.grad is not None: #leaf node in the graph retain gradient
-                        log_writer.add_histogram(name + '_grad_test1', param.grad, epoch)
+        #print the loss
+        log_writer.add_scalars('DiceLoss/Fundus_UNet_SFConv', {'train':np.mean(train_loss), 'val':np.mean(test_loss)}, epoch+1)
     log_writer.close() #shut up the tensorboard
     print("\r Dice of testset = %.4f" % (1-loss_min))
 
 def Test():
     print('********************load data********************')
-    dataloader_test = get_test_dataloader(batch_size=8, shuffle=False, num_workers=0) #BATCH_SIZE
+    dataloader_test = get_test_dataloader(batch_size=8, shuffle=False, num_workers=1) #BATCH_SIZE
     print('********************load data succeed!********************')
 
     print('********************load model********************')
@@ -139,12 +123,6 @@ def Test():
         print("=> Loaded well-trained segmentation model checkpoint of Vin-CXR dataset: "+CKPT_PATH)
     model.eval()
     criterion = DiceLoss().cuda()
-    #log_writer = SummaryWriter('/data/tmpexec/tensorboard-log') #--port 10002, start tensorboard
-    #for name, param in model.named_parameters():
-    #    print(name,'---', param.size())
-        #if name in MODEL_PARAMS:
-            #log_writer.add_histogram('test_conv_' + name + '_data', param.clone().cpu().data.numpy())
-    #log_writer.close() #shut up the tensorboard
     print('******************** load model succeed!********************')
 
     print('******* begin testing!*********')

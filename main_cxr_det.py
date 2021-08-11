@@ -120,6 +120,9 @@ def Test():
     anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256),),aspect_ratios=((0.5, 1.0, 2.0),))
     roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'],output_size=7,sampling_ratio=2)
     model = FasterRCNN(backbone, num_classes=NUM_CLASSES, rpn_anchor_generator=anchor_generator, box_roi_pool=roi_pooler).cuda()
+
+    for name, param in backbone.named_parameters():
+        print(name,'---', param.size())
     
     if os.path.exists(CKPT_PATH):
         checkpoint = torch.load(CKPT_PATH)
@@ -173,7 +176,7 @@ def Test():
         print('The mAP of {} is {:.4f}'.format(CLASS_NAMES_Vin[i], np.mean(mAP[i])))
 
 def main():
-    Train()
+    #Train()
     Test()
 
 if __name__ == '__main__':
