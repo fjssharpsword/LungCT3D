@@ -18,8 +18,8 @@ from torch.nn.utils import weight_norm
 #https://github.com/pytorch/pytorch/blob/master/torch/nn/utils/spectral_norm.py
 from torch.nn.utils import spectral_norm
 #define by myself
-from nets.conv_mf import TensorTrain
-from nets.spec_conv2d_mf import SpecConv2d
+#from nets.conv_mf import TensorTrain
+#from nets.spec_conv2d_mf import SpecConv2d
 
 #https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -39,19 +39,19 @@ model_urls = {
 }
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
     """3x3 convolution with padding"""
-    #return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation)
     #return weight_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
     #return TensorTrain(in_channels=in_planes, out_channels=out_planes, kernel_size=3, rank_scale=0.5, dimensions=2, stride=stride, padding =dilation, bias=False)
     #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=dilation, groups=groups, bias=False, dilation=dilation))
-    return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=3, stride=stride)
+    #return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=3, stride=stride)
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     """1x1 convolution"""
-    #return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
     #return weight_norm(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
     #return TensorTrain(in_channels=in_planes, out_channels=out_planes, kernel_size=1, rank_scale=0.5, dimensions=2, stride=stride, padding = 0, bias=False)
     #return spectral_norm(nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False))
-    return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=1, stride=stride)
+    #return SpecConv2d(in_channels=in_planes, out_channels=out_planes, kernel_size=1, stride=stride)
 
 class BasicBlock(nn.Module):
     expansion: int = 1
@@ -400,7 +400,7 @@ def wide_resnet101_2(pretrained: bool = False, progress: bool = True, **kwargs: 
 
 if __name__ == "__main__":
     #for debug  
-    x =  torch.rand(2, 1, 32, 32).cuda()
+    x =  torch.rand(2, 3, 256, 256).cuda()
     model = resnet18(pretrained=False, num_classes=15).cuda()
     out = model(x)
     print(out.shape)

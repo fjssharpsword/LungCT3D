@@ -22,6 +22,10 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from tensorboardX import SummaryWriter
 from thop import profile
 from sklearn.metrics import roc_auc_score
+import matplotlib.pyplot as plt
+from PIL import Image
+import matplotlib.patches as patches
+import cv2
 #define by myself
 from utils.common import compute_iou, count_bytes
 from data_cxr2d.vincxr_coco import get_box_dataloader_VIN
@@ -40,7 +44,7 @@ BACKBONE_PARAMS = ['4.0.conv1.weight', '4.0.conv1.weight_v', '4.0.conv1.grouped.
 BATCH_SIZE = 8
 MAX_EPOCHS = 20
 NUM_CLASSES =  len(CLASS_NAMES_Vin)
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_sfconv.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/vincxr_resnet_conv.pkl'
 
 def Train():
     print('********************load data********************')
@@ -175,9 +179,76 @@ def Test():
     for i in range(NUM_CLASSES):
         print('The mAP of {} is {:.4f}'.format(CLASS_NAMES_Vin[i], np.mean(mAP[i])))
 
+def VisFeature():
+    print('********************load data********************')
+    data_loader_test = get_box_dataloader_VIN(batch_size=1, shuffle=True, num_workers=0)
+    print('********************load data succeed!********************')
+
+    print('********************load model********************')
+    resnet = resnet18(pretrained=False, num_classes=NUM_CLASSES).cuda()
+    backbone = nn.Sequential(resnet.conv1, resnet.bn1,resnet.relu, resnet.maxpool,resnet.layer1,resnet.layer2,resnet.layer3,resnet.layer4)
+    #backbone = densenet121(pretrained=False, num_classes=NUM_CLASSES).features.cuda()
+    backbone.out_channels = 512 #resnet18=512,  densenet121=1024
+    anchor_generator = AnchorGenerator(sizes=((32, 64, 128, 256),),aspect_ratios=((0.5, 1.0, 2.0),))
+    roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0'],output_size=7,sampling_ratio=2)
+    model = FasterRCNN(backbone, num_classes=NUM_CLASSES, rpn_anchor_generator=anchor_generator, box_roi_pool=roi_pooler).cuda()
+
+    #for name, param in backbone.named_parameters():
+    #    print(name,'---', param.size())
+    
+    if os.path.exists(CKPT_PATH):
+        checkpoint = torch.load(CKPT_PATH)
+        model.load_state_dict(checkpoint) #strict=False
+        print("=> Loaded well-trained checkpoint from: " + CKPT_PATH)
+    model.eval() 
+    print('******************** load model succeed!********************')
+
+    print('*******Plot!*********')
+    #log_writer = SummaryWriter('/data/tmpexec/tensorboard-log') #--port 10002, start tensorboard
+    with torch.autograd.no_grad():
+        for batch_idx, (images, targets) in enumerate(data_loader_test):
+            images = list(image.cuda() for image in images)
+            targets = [{k:v.squeeze(0).cuda() for k, v in t.items()} for t in targets]
+            fea_map = model.backbone(images[0].unsqueeze(0))#forward
+            #log_writer.add_histogram('cxr_fea', fea_map, 2)
+            plt.hist(fea_map.cpu().numpy().flatten(), facecolor='r', alpha=0.75)
+            plt.savefig('/data/pycode/LungCT3D/imgs/fea_4.jpg')
+
+            img = images[0]
+            box = targets[0]['boxes'][0]
+            lbl = targets[0]['labels'][0]
+            #plot goundtruth box
+            fig, ax = plt.subplots()# Create figure and axes
+            img = img.cpu().numpy().transpose(1,2,0)
+            ax.imshow(img)
+            rect = patches.Rectangle((box[0], box[1]), box[2]-box[0], box[3]-box[1], linewidth=2, edgecolor='r', facecolor='none')
+            ax.add_patch(rect)# add groundtruth
+            ax.text(box[0], box[1], CLASS_NAMES_Vin[lbl])
+            ax.axis('off')
+            fig.savefig('/data/pycode/LungCT3D/imgs/img_3.jpg')
+            #log_writer.add_histogram('cxr_data', img, 2)
+          
+            """
+            fea_map = fea_map.cpu().numpy().squeeze()
+            fea_map = np.mean(fea_map, axis=0)
+            #fea_map = np.maximum(fea_map, 0)
+            #fea_map /= np.max(fea_map)
+            #plt.matshow(fea_map)
+            #plt.savefig('/data/pycode/LungCT3D/imgs/fea_1.jpg')
+            fea_map = cv2.resize(fea_map, (img.shape[0], img.shape[1]))  
+            fea_map = np.uint8(255 * fea_map) 
+            fea_map = cv2.applyColorMap(fea_map, cv2.COLORMAP_JET)  
+            img = np.uint8(255 * img) 
+            overlay_img = fea_map * 0.3 + img 
+            cv2.imwrite('/data/pycode/LungCT3D/imgs/fea_1.jpg', overlay_img)
+            """
+            break
+    #log_writer.close() #shut up the tensorboard
+
 def main():
     #Train()
-    Test()
+    #Test()
+    VisFeature()
 
 if __name__ == '__main__':
     main()

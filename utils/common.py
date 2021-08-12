@@ -12,6 +12,10 @@ import time
 import argparse
 import numpy as np
 import pandas as pd
+import torch
+from PIL import Image
+import matplotlib.pyplot as plt
+import imageio
 
 def count_bytes(file_size):
     '''
@@ -85,3 +89,17 @@ def dice_coeff(input, target):
     dice = loss.sum() / N
 
     return dice
+
+
+def show_feature_map(feature_map):
+    feature_map = feature_map.squeeze(0)
+    feature_map = feature_map.cpu().numpy()
+    feature_map_num = feature_map.shape[0]
+    row_num = np.ceil(np.sqrt(feature_map_num))
+    plt.figure()
+    for index in range(1, feature_map_num+1):
+        plt.subplot(row_num, row_num, index)
+        plt.imshow(feature_map[index-1], cmap='gray')
+        plt.axis('off')
+        imageio.imwrite(str(index)+".png", feature_map[index-1])
+    plt.savefig('/data/pycode/LungCT3D/imgs/fea_map1.jpg')
