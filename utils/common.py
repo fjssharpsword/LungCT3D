@@ -103,3 +103,23 @@ def show_feature_map(feature_map):
         plt.axis('off')
         imageio.imwrite(str(index)+".png", feature_map[index-1])
     plt.savefig('/data/pycode/LungCT3D/imgs/fea_map1.jpg')
+
+def transparent_back(img, gt=True):
+    #img = img.convert('RGBA')
+    L, H = img.size
+    color_0 = img.getpixel((0,0)) #alpha channel: 0~255
+    for h in range(H):
+        for l in range(L):
+            dot = (l,h)
+            color_1 = img.getpixel(dot)
+            if color_1 == color_0:
+                color_1 = color_1[:-1] + (0,)
+                img.putpixel(dot,color_1)
+            else: 
+                if gt: #true mask
+                    color_1 = ( 0, 0, 255, 255) #turn to blue  and transparency 
+                    img.putpixel(dot,color_1)
+                else: #pred mask
+                    color_1 = ( 0 , 255, 0, 255) #turn to green  and transparency 
+                    img.putpixel(dot,color_1)
+    return img

@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import matplotlib.patches as patches
 import cv2
+import seaborn as sns
 #define by myself
 from utils.common import compute_iou, count_bytes
 from data_cxr2d.vincxr_coco import get_box_dataloader_VIN
@@ -211,8 +212,9 @@ def VisFeature():
             targets = [{k:v.squeeze(0).cuda() for k, v in t.items()} for t in targets]
             fea_map = model.backbone(images[0].unsqueeze(0))#forward
             #log_writer.add_histogram('cxr_fea', fea_map, 2)
-            plt.hist(fea_map.cpu().numpy().flatten(), facecolor='r', alpha=0.75)
-            plt.savefig('/data/pycode/LungCT3D/imgs/fea_4.jpg')
+            plt.hist(fea_map.cpu().numpy().flatten(), facecolor='r', alpha=0.75, density=True, linewidth=0.5) #orange
+            #ax = sns.distplot(fea_map.cpu().numpy().flatten())
+            plt.savefig('/data/pycode/LungCT3D/imgs/fea_5.jpg')
 
             img = images[0]
             box = targets[0]['boxes'][0]

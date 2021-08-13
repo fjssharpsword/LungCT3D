@@ -26,8 +26,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 import matplotlib.pyplot as plt
 from thop import profile
 from tensorboardX import SummaryWriter
+import matplotlib.pyplot as plt
+from PIL import Image
+import matplotlib.patches as patches
+import cv2
+import seaborn as sns
 #define by myself
-from utils.common import dice_coeff, count_bytes
+from utils.common import dice_coeff, count_bytes, transparent_back
 from data_fundus2d.fundus_dataloader import get_train_dataloader, get_test_dataloader
 from nets.unet_2d import UNet, DiceLoss
 
@@ -35,7 +40,7 @@ from nets.unet_2d import UNet, DiceLoss
 os.environ['CUDA_VISIBLE_DEVICES'] = "0,1,2,3,4,5,6,7"
 BATCH_SIZE = 16
 MAX_EPOCHS = 200
-CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet_sfconv.pkl'
+CKPT_PATH = '/data/pycode/LungCT3D/ckpt/fundus_unet_conv.pkl'
 def Train():
     print('********************load data********************')
     dataloader_train = get_train_dataloader(batch_size=BATCH_SIZE, shuffle=True, num_workers=1)
@@ -149,9 +154,51 @@ def Test():
     #Compute Dice coefficient
     print("\r Dice coefficient = %.4f" % (1-np.mean(dice_coe)))
 
+def VisSeg():
+    print('********************load data********************')
+    dataloader_test = get_test_dataloader(batch_size=1, shuffle=False, num_workers=0) #BATCH_SIZE
+    print('********************load data succeed!********************')
+
+    print('********************load model********************')
+    model = UNet(n_channels=3, n_classes=1).cuda()
+    if os.path.exists(CKPT_PATH):
+        checkpoint = torch.load(CKPT_PATH)
+        model.load_state_dict(checkpoint) #strict=False
+        print("=> Loaded well-trained segmentation model checkpoint of Vin-CXR dataset: "+CKPT_PATH)
+    model.eval()
+    criterion = DiceLoss().cuda()
+    print('******************** load model succeed!********************')
+
+    print('******* begin testing!*********')
+    time_res = []
+    dice_coe = []
+    with torch.autograd.no_grad():
+        for batch_idx, (image, mask) in enumerate(dataloader_test):
+            var_image = torch.autograd.Variable(image).cuda()
+            var_out = model(var_image)
+            #plot goundtruth box
+            fig, ax = plt.subplots()# Create figure and axes
+            img = image.squeeze().numpy().transpose(1,2,0)
+            msk = mask.numpy().repeat(3, axis=0).transpose(1,2,0)
+            prd = var_out.cpu().squeeze(0).numpy().repeat(3, axis=0).transpose(1,2,0)
+            img =  img + msk*prd
+            img = np.where(img>1, 1, img)
+            ax.imshow(img)
+            ax.axis('off')
+            fig.savefig('/data/pycode/LungCT3D/imgs/fundus_conv.jpg')
+            #img = np.uint8(255 * img) 
+            #img = cv2.applyColorMap(img, cv2.COLORMAP_JET) 
+            #msk = mask.numpy().squeeze()
+            #msk = np.uint8(255 * msk) 
+            #msk = cv2.applyColorMap(msk, cv2.COLORMAP_JET)  
+            #overlay_img = msk * 0.3 + img 
+            #cv2.imwrite('/data/pycode/LungCT3D/imgs/fundus.jpg', overlay_img)
+            break
+
 def main():
-    Train()
-    Test()
+    #Train()
+    #Test()
+    VisSeg()
 
 if __name__ == '__main__':
     main()
